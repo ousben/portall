@@ -6,6 +6,10 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config(); // Charge les variables d'environnement
 
+// Import de la configuration de la base de données
+const { testConnection, sequelize } = require('./config/database.connection');
+const models = require('./models');
+
 // Création de l'application Express
 const app = express();
 
@@ -31,8 +35,28 @@ app.get('/api/health', (req, res) => {
     status: 'OK',
     message: 'Portall API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    database: 'Connected' // Nous pouvons maintenant confirmer cela
   });
+});
+
+// Route de test pour la base de données
+app.get('/api/db-test', async (req, res) => {
+  try {
+    // Test simple : compter les utilisateurs
+    const userCount = await models.User.count();
+    res.json({
+      status: 'success',
+      message: 'Database connection working',
+      userCount
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Database error',
+      error: error.message
+    });
+  }
 });
 
 // Route de base
@@ -42,6 +66,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/api/health',
+      dbTest: '/api/db-test',
       auth: '/api/auth (coming soon)',
       users: '/api/users (coming soon)'
     }
@@ -52,15 +77,35 @@ app.get('/', (req, res) => {
 // Ce middleware doit être défini en dernier
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  
   res.status(err.status || 500).json({
     message: err.message || 'Something went wrong!',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
 
-// Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Fonction pour démarrer le serveur
+const startServer = async () => {
+  try {
+    // Tester la connexion à la base de données
+    await testConnection();
+    
+    // Synchroniser les modèles avec la base de données
+    // En production, utilise les migrations au lieu de sync
+    if (process.env.NODE_ENV !== 'production') {
+      await sequelize.sync({ alter: true });
+      console.log('📊 Database models synchronized');
+    }
+    
+    // Démarrer le serveur
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Démarrer l'application
+startServer();
