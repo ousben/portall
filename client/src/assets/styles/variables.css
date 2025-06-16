@@ -1,0 +1,52 @@
+/* portall/client/src/assets/styles/variables.css */
+
+/* Variables CSS pour maintenir la cohérence */
+:root {
+  /* Couleurs principales - j'ai choisi un thème sportif moderne */
+  --color-primary: #2563eb;      /* Bleu vif */
+  --color-primary-dark: #1d4ed8;
+  --color-primary-light: #3b82f6;
+  
+  --color-secondary: #10b981;    /* Vert succès */
+  --color-secondary-dark: #059669;
+  --color-secondary-light: #34d399;
+  
+  --color-accent: #f59e0b;       /* Orange énergique */
+  
+  /* Couleurs neutres */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  
+  /* Spacing (basé sur une échelle de 8px) */
+  --spacing-xs: 0.4rem;
+  --spacing-sm: 0.8rem;
+  --spacing-md: 1.6rem;
+  --spacing-lg: 2.4rem;
+  --spacing-xl: 3.2rem;
+  --spacing-2xl: 4.8rem;
+  --spacing-3xl: 6.4rem;
+  
+  /* Typographie */
+  --font-size-xs: 1.2rem;
+  --font-size-sm: 1.4rem;
+  --font-size-base: 1.6rem;
+  --font-size-lg: 1.8rem;
+  --font-size-xl: 2rem;
+  --font-size-2xl: 2.4rem;
+  --font-size-3xl: 3rem;
+  --font-size-4xl: 3.6rem;
+  
+  /* Autres */
+  --border-radius: 0.8rem;
+  --transition: all 0.3s ease;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
