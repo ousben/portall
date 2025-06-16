@@ -1,21 +1,14 @@
+// portall/server/models/index.js
+
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const Sequelize = require('sequelize');
-const process = require('process');
+const { sequelize } = require('../config/database.connection'); // ← Utilise votre config unifiée
 const basename = path.basename(__filename);
-const env = process.env.NODE_ENV || 'development';
-const config = require(__dirname + '/../config/config.json')[env];
 const db = {};
 
-let sequelize;
-if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable], config);
-} else {
-  sequelize = new Sequelize(config.database, config.username, config.password, config);
-}
-
+// Charger automatiquement tous les modèles du dossier models
 fs
   .readdirSync(__dirname)
   .filter(file => {
@@ -27,17 +20,29 @@ fs
     );
   })
   .forEach(file => {
-    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
-    db[model.name] = model;
+    // Charger chaque modèle en utilisant notre instance sequelize
+    const model = require(path.join(__dirname, file));
+    
+    // Vérifier si le modèle exporte une fonction ou un objet
+    if (typeof model === 'function') {
+      // Si c'est une fonction, l'appeler avec sequelize et DataTypes
+      const modelInstance = model(sequelize, sequelize.Sequelize.DataTypes);
+      db[modelInstance.name] = modelInstance;
+    } else {
+      // Si c'est déjà un modèle configuré, l'utiliser directement
+      db[model.name] = model;
+    }
   });
 
+// Configurer les associations entre modèles
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
     db[modelName].associate(db);
   }
 });
 
+// Exporter l'instance sequelize et les modèles
 db.sequelize = sequelize;
-db.Sequelize = Sequelize;
+db.Sequelize = sequelize.Sequelize;
 
 module.exports = db;

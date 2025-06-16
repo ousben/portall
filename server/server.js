@@ -14,7 +14,7 @@ const models = require('./models');
 const app = express();
 
 // Configuration du port - utilise la variable d'environnement ou 5000 par défaut
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Middleware
 // CORS permet à notre frontend (port 3000) de communiquer avec notre backend (port 5000)
@@ -92,8 +92,17 @@ const startServer = async () => {
     // Synchroniser les modèles avec la base de données
     // En production, utilise les migrations au lieu de sync
     if (process.env.NODE_ENV !== 'production') {
-      await sequelize.sync({ alter: true });
-      console.log('📊 Database models synchronized');
+      // En développement, on peut utiliser sync pour simplifier
+      // Mais seulement si les migrations ont été exécutées au moins une fois
+      try {
+        // Vérifier si la table users existe
+        await sequelize.getQueryInterface().describeTable('users');
+        console.log('📊 Database tables already exist');
+      } catch (error) {
+        console.log('📊 Running database sync for development...');
+        await sequelize.sync({ force: false, alter: true });
+        console.log('📊 Database models synchronized');
+      }
     }
     
     // Démarrer le serveur
