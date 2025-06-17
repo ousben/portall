@@ -29,6 +29,13 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       }
+    },
+    // CORRECTION : Configuration pour éviter les erreurs de source map
+    build: {
+      sourcemap: false, // Désactive les source maps en production pour éviter les erreurs
+    },
+    css: {
+      devSourcemap: true, // Active les source maps CSS seulement en développement
     }
   }
 })
