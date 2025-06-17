@@ -3,6 +3,7 @@
 // Import des modules nécessaires
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet'); // Nouveau : sécurité des headers HTTP
 const path = require('path');
 require('dotenv').config(); // Charge les variables d'environnement
 
@@ -10,33 +11,49 @@ require('dotenv').config(); // Charge les variables d'environnement
 const { testConnection, sequelize } = require('./config/database.connection');
 const models = require('./models');
 
+// Import des routes
+const authRoutes = require('./routes/auth'); // Nouvelle ligne
+
 // Création de l'application Express
 const app = express();
 
 // Configuration du port - utilise la variable d'environnement ou 5000 par défaut
 const PORT = process.env.PORT || 5001;
 
+// **MIDDLEWARE DE SÉCURITÉ**
+// Helmet ajoute des headers de sécurité automatiquement
+app.use(helmet());
+
 // Middleware
 // CORS permet à notre frontend (port 3000) de communiquer avec notre backend (port 5000)
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true // Permet l'envoi de cookies
+  credentials: true, // Permet l'envoi de cookies
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Parse le JSON dans le body des requêtes
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Limite la taille des requêtes
 
 // Parse les données de formulaire URL-encoded
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Route de santé - permet de vérifier que l'API fonctionne
+// Routes d'authentification - NOUVELLE SECTION
+app.use('/api/auth', authRoutes);
+
+// Route de santé générale - permet de vérifier que l'API fonctionne
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
     message: 'Portall API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: 'Connected' // Nous pouvons maintenant confirmer cela
+    database: 'Connected',
+    services: {
+      auth: '/api/auth/health',
+      database: 'Connected'
+    }
   });
 });
 
@@ -59,27 +76,54 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
-// Route de base
+// Route de base avec informations sur l'API
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to Portall API',
     version: '1.0.0',
+    documentation: 'Coming soon',
     endpoints: {
       health: '/api/health',
-      dbTest: '/api/db-test',
-      auth: '/api/auth (coming soon)',
-      users: '/api/users (coming soon)'
+      auth: {
+        base: '/api/auth',
+        health: '/api/auth/health',
+        register: 'POST /api/auth/register',
+        login: 'POST /api/auth/login',
+        refresh: 'POST /api/auth/refresh',
+        logout: 'POST /api/auth/logout',
+        me: 'GET /api/auth/me',
+        forgotPassword: 'POST /api/auth/forgot-password',
+        resetPassword: 'POST /api/auth/reset-password'
+      }
     }
   });
 });
 
-// Middleware de gestion d'erreur global
+// **MIDDLEWARE DE GESTION D'ERREUR GLOBAL**
+// Ce middleware attrape toutes les erreurs non gérées
 // Ce middleware doit être défini en dernier
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Unhandled error:', err.stack);
+  
+  // Ne pas exposer les détails d'erreur en production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
   res.status(err.status || 500).json({
-    message: err.message || 'Something went wrong!',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    status: 'error',
+    message: err.message || 'Internal server error',
+    ...(isDevelopment && { 
+      stack: err.stack,
+      details: err 
+    })
+  });
+});
+
+// Middleware pour les routes non trouvées
+app.use('*', (req, res) => {
+  res.status(404).json({
+    status: 'error',
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+    availableEndpoints: '/'
   });
 });
 
@@ -109,6 +153,7 @@ const startServer = async () => {
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔐 Auth endpoints available at http://localhost:${PORT}/api/auth`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
