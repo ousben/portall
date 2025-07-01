@@ -3,46 +3,46 @@
 // Import des modules nécessaires
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet'); // Nouveau : sécurité des headers HTTP
+const helmet = require('helmet');
 const path = require('path');
-require('dotenv').config(); // Charge les variables d'environnement
+require('dotenv').config();
 
 // Import de la configuration de la base de données
 const { testConnection, sequelize } = require('./config/database.connection');
 const models = require('./models');
 
 // Import des routes
-const authRoutes = require('./routes/auth'); // Nouvelle ligne
+const authRoutes = require('./routes/auth');
+const referenceRoutes = require('./routes/reference'); // NOUVEAU
 
 // Création de l'application Express
 const app = express();
 
-// Configuration du port - utilise la variable d'environnement ou 5000 par défaut
+// Configuration du port
 const PORT = process.env.PORT || 5001;
 
-// **MIDDLEWARE DE SÉCURITÉ**
-// Helmet ajoute des headers de sécurité automatiquement
+// Middleware de sécurité
 app.use(helmet());
 
-// Middleware
-// CORS permet à notre frontend (port 3000) de communiquer avec notre backend (port 5000)
+// Middleware CORS
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true, // Permet l'envoi de cookies
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Parse le JSON dans le body des requêtes
-app.use(express.json({ limit: '10mb' })); // Limite la taille des requêtes
-
-// Parse les données de formulaire URL-encoded
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Routes d'authentification - NOUVELLE SECTION
+// Routes d'authentification
 app.use('/api/auth', authRoutes);
 
-// Route de santé générale - permet de vérifier que l'API fonctionne
+// Routes des données de référence (NOUVEAU)
+app.use('/api/reference', referenceRoutes);
+
+// Route de santé générale
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -52,6 +52,7 @@ app.get('/api/health', (req, res) => {
     database: 'Connected',
     services: {
       auth: '/api/auth/health',
+      reference: '/api/reference/health', // NOUVEAU
       database: 'Connected'
     }
   });
@@ -60,12 +61,22 @@ app.get('/api/health', (req, res) => {
 // Route de test pour la base de données
 app.get('/api/db-test', async (req, res) => {
   try {
-    // Test simple : compter les utilisateurs
     const userCount = await models.User.count();
+    const playerCount = await models.PlayerProfile.count();
+    const coachCount = await models.CoachProfile.count();
+    const njcaaCollegeCount = await models.NJCAACollege.count();
+    const ncaaCollegeCount = await models.NCAACollege.count();
+    
     res.json({
       status: 'success',
       message: 'Database connection working',
-      userCount
+      statistics: {
+        users: userCount,
+        players: playerCount,
+        coaches: coachCount,
+        njcaaColleges: njcaaCollegeCount,
+        ncaaColleges: ncaaCollegeCount
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -80,10 +91,11 @@ app.get('/api/db-test', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to Portall API',
-    version: '1.0.0',
+    version: '1.1.0', // Version mise à jour
     documentation: 'Coming soon',
     endpoints: {
       health: '/api/health',
+      dbTest: '/api/db-test',
       auth: {
         base: '/api/auth',
         health: '/api/auth/health',
@@ -94,18 +106,27 @@ app.get('/', (req, res) => {
         me: 'GET /api/auth/me',
         forgotPassword: 'POST /api/auth/forgot-password',
         resetPassword: 'POST /api/auth/reset-password'
+      },
+      reference: { // NOUVEAU
+        base: '/api/reference',
+        health: '/api/reference/health',
+        njcaaColleges: 'GET /api/reference/njcaa-colleges',
+        ncaaColleges: 'GET /api/reference/ncaa-colleges',
+        ncaaCollegesByDivision: 'GET /api/reference/ncaa-colleges/:division',
+        admin: {
+          createNJCAACollege: 'POST /api/reference/njcaa-colleges',
+          updateNJCAACollege: 'PUT /api/reference/njcaa-colleges/:id',
+          createNCAACollege: 'POST /api/reference/ncaa-colleges'
+        }
       }
     }
   });
 });
 
-// **MIDDLEWARE DE GESTION D'ERREUR GLOBAL**
-// Ce middleware attrape toutes les erreurs non gérées
-// Ce middleware doit être défini en dernier
+// Middleware de gestion d'erreur global
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err.stack);
   
-  // Ne pas exposer les détails d'erreur en production
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   res.status(err.status || 500).json({
@@ -134,12 +155,8 @@ const startServer = async () => {
     await testConnection();
     
     // Synchroniser les modèles avec la base de données
-    // En production, utilise les migrations au lieu de sync
     if (process.env.NODE_ENV !== 'production') {
-      // En développement, on peut utiliser sync pour simplifier
-      // Mais seulement si les migrations ont été exécutées au moins une fois
       try {
-        // Vérifier si la table users existe
         await sequelize.getQueryInterface().describeTable('users');
         console.log('📊 Database tables already exist');
       } catch (error) {
@@ -154,6 +171,7 @@ const startServer = async () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔐 Auth endpoints available at http://localhost:${PORT}/api/auth`);
+      console.log(`📚 Reference endpoints available at http://localhost:${PORT}/api/reference`); // NOUVEAU
     });
   } catch (error) {
     console.error('Failed to start server:', error);

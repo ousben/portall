@@ -1,12 +1,12 @@
-// portall/server/routes/auth.js
+// portall/server/routes/auth.js - VERSION MISE À JOUR
 
 const express = require('express');
 const AuthController = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 const { authLimiter, generalAuthLimiter, forgotPasswordLimiter } = require('../middleware/rateLimiting');
+const { validateRegistration } = require('../middleware/advancedValidation'); // NOUVEAU
 const { 
   validate, 
-  registerSchema, 
   loginSchema, 
   refreshTokenSchema,
   forgotPasswordSchema,
@@ -16,76 +16,72 @@ const {
 const router = express.Router();
 
 /**
- * Routes d'authentification
+ * Routes d'authentification mises à jour pour la Phase 3
  * 
- * Chaque route est comme une station dans un processus de sécurité :
- * - Validation des données (contrôle des papiers)
- * - Rate limiting (contrôle du flux)
- * - Logique métier (traitement)
+ * La principale différence est l'utilisation du nouveau middleware
+ * de validation avancé pour l'inscription.
  */
 
-// POST /api/auth/register
-// Inscription d'un nouvel utilisateur
+// POST /api/auth/register - MISE À JOUR
+// Inscription avec validation conditionnelle selon le type d'utilisateur
 router.post('/register', 
-  authLimiter, // Protection contre les inscriptions en masse
-  validate(registerSchema), // Validation des données
+  authLimiter,
+  validateRegistration, // NOUVEAU : Remplace l'ancien validate(registerSchema)
   AuthController.register
 );
 
-// POST /api/auth/login
-// Connexion d'un utilisateur
+// Les autres routes restent identiques
 router.post('/login',
-  authLimiter, // Protection contre les attaques par force brute
-  validate(loginSchema), // Validation email/password
+  authLimiter,
+  validate(loginSchema),
   AuthController.login
 );
 
-// POST /api/auth/refresh
-// Rafraîchissement des tokens
 router.post('/refresh',
-  generalAuthLimiter, // Rate limiting plus permissif
-  validate(refreshTokenSchema), // Validation du refresh token
+  generalAuthLimiter,
+  validate(refreshTokenSchema),
   AuthController.refresh
 );
 
-// POST /api/auth/logout
-// Déconnexion (nécessite d'être authentifié)
 router.post('/logout',
-  authenticate, // L'utilisateur doit être connecté pour se déconnecter
+  authenticate,
   AuthController.logout
 );
 
-// GET /api/auth/me
-// Obtenir le profil de l'utilisateur connecté
 router.get('/me',
-  authenticate, // Nécessite d'être authentifié
+  authenticate,
   AuthController.getMe
 );
 
-// POST /api/auth/forgot-password
-// Demande de reset de mot de passe
 router.post('/forgot-password',
-  forgotPasswordLimiter, // Rate limiting très strict
-  validate(forgotPasswordSchema), // Validation email
+  forgotPasswordLimiter,
+  validate(forgotPasswordSchema),
   AuthController.forgotPassword
 );
 
-// POST /api/auth/reset-password
-// Reset du mot de passe avec token
 router.post('/reset-password',
-  generalAuthLimiter, // Rate limiting modéré
-  validate(resetPasswordSchema), // Validation token + password
+  generalAuthLimiter,
+  validate(resetPasswordSchema),
   AuthController.resetPassword
 );
 
-// Route de santé pour les auth services
+// Route de santé inchangée
 router.get('/health', (req, res) => {
   res.json({
     status: 'success',
     message: 'Auth service is running',
     timestamp: new Date().toISOString(),
+    validation: {
+      version: '3.0',
+      features: [
+        'Conditional validation by user type',
+        'Async database validations',
+        'Cross-field business logic validation',
+        'Enhanced error reporting'
+      ]
+    },
     endpoints: {
-      register: 'POST /api/auth/register',
+      register: 'POST /api/auth/register (enhanced validation)',
       login: 'POST /api/auth/login',
       refresh: 'POST /api/auth/refresh',
       logout: 'POST /api/auth/logout',

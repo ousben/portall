@@ -19,6 +19,26 @@ function SignupPage() {
     password: '',
     confirmPassword: ''
   })
+
+  // État pour gérer les données spécifiques selon le type
+  const [specificData, setSpecificData] = useState({
+    // Données joueur
+    gender: '',
+    collegeId: '',
+  
+    // Données coach  
+    position: '',
+    phoneNumber: '',
+    division: '',
+    teamSport: ''
+  });
+
+  // État pour les listes de référence (colleges)
+  const [referenceData, setReferenceData] = useState({
+    njcaaColleges: [],
+    ncaaColleges: [],
+    loading: true
+  });
   
   // État pour les erreurs de validation côté client
   const [validationErrors, setValidationErrors] = useState({})

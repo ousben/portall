@@ -25,9 +25,8 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false,
       validate: {
-        len: [8, 128], // Minimum 8 caractères
+        len: [8, 128],
         notEmpty: true,
-        // Validation personnalisée pour la complexité du mot de passe
         isStrongPassword(value) {
           const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
           if (!strongPasswordRegex.test(value)) {
@@ -43,11 +42,10 @@ module.exports = (sequelize, DataTypes) => {
       validate: {
         notEmpty: true,
         len: [2, 50],
-        isAlpha: true // Uniquement des lettres
+        isAlpha: true
       },
       field: 'first_name',
       set(value) {
-        // Capitalise la première lettre
         this.setDataValue('firstName', value.charAt(0).toUpperCase() + value.slice(1).toLowerCase().trim());
       }
     },
@@ -92,19 +90,16 @@ module.exports = (sequelize, DataTypes) => {
       field: 'last_login'
     },
     
-    // Nouveau : Token de vérification email
     emailVerificationToken: {
       type: DataTypes.STRING,
       field: 'email_verification_token'
     },
     
-    // Nouveau : Token de reset password
     passwordResetToken: {
       type: DataTypes.STRING,
       field: 'password_reset_token'
     },
     
-    // Nouveau : Expiration du token de reset
     passwordResetExpires: {
       type: DataTypes.DATE,
       field: 'password_reset_expires'
@@ -115,7 +110,6 @@ module.exports = (sequelize, DataTypes) => {
     underscored: true,
     
     hooks: {
-      // Hook pour hasher le mot de passe avant la création
       beforeCreate: async (user) => {
         if (user.password) {
           user.password = await bcrypt.hash(user.password, bcryptConfig.saltRounds);
@@ -123,7 +117,6 @@ module.exports = (sequelize, DataTypes) => {
         console.log(`🔐 Creating new user: ${user.email}`);
       },
       
-      // Hook pour hasher le mot de passe avant la mise à jour
       beforeUpdate: async (user) => {
         if (user.changed('password')) {
           user.password = await bcrypt.hash(user.password, bcryptConfig.saltRounds);
@@ -133,9 +126,7 @@ module.exports = (sequelize, DataTypes) => {
     }
   });
 
-  // **MÉTHODES D'INSTANCE IMPORTANTES**
-
-  // Vérifier le mot de passe
+  // Méthodes d'instance existantes
   User.prototype.validatePassword = async function(password) {
     try {
       return await bcrypt.compare(password, this.password);
@@ -145,7 +136,6 @@ module.exports = (sequelize, DataTypes) => {
     }
   };
 
-  // Obtenir les données publiques (sans informations sensibles)
   User.prototype.toPublicJSON = function() {
     const values = Object.assign({}, this.dataValues);
     delete values.password;
@@ -155,37 +145,65 @@ module.exports = (sequelize, DataTypes) => {
     return values;
   };
 
-  // Obtenir le nom complet
   User.prototype.getFullName = function() {
     return `${this.firstName} ${this.lastName}`;
   };
 
-  // Marquer la dernière connexion
   User.prototype.updateLastLogin = async function() {
     this.lastLogin = new Date();
     await this.save({ fields: ['lastLogin'] });
   };
 
-  // **MÉTHODES STATIQUES**
+  // NOUVELLES méthodes pour gérer les profils
+  User.prototype.getProfile = async function() {
+    if (this.userType === 'player') {
+      return await this.getPlayerProfile({
+        include: ['college']
+      });
+    } else if (this.userType === 'coach') {
+      return await this.getCoachProfile({
+        include: ['college']
+      });
+    }
+    return null;
+  };
 
-  // Rechercher un utilisateur par email
+  User.prototype.toCompleteJSON = async function() {
+    const userJSON = this.toPublicJSON();
+    const profile = await this.getProfile();
+    
+    return {
+      ...userJSON,
+      profile: profile ? profile.toJSON() : null
+    };
+  };
+
+  // Méthodes statiques existantes
   User.findByEmail = async function(email) {
     return await this.findOne({
       where: { email: email.toLowerCase().trim() }
     });
   };
 
-  // Vérifier si un email existe déjà
   User.emailExists = async function(email) {
     const user = await this.findByEmail(email);
     return !!user;
   };
 
-  // Associations (à définir quand on créera les autres modèles)
+  // NOUVELLES associations avec les profils
   User.associate = function(models) {
-    // Exemple futur :
-    // User.hasOne(models.PlayerProfile, { foreignKey: 'userId' });
-    // User.hasOne(models.CoachProfile, { foreignKey: 'userId' });
+    // Un utilisateur peut avoir un profil joueur OU un profil coach
+    User.hasOne(models.PlayerProfile, {
+      foreignKey: 'userId',
+      as: 'playerProfile',
+      constraints: false // Permet la relation optionnelle
+    });
+    
+    User.hasOne(models.CoachProfile, {
+      foreignKey: 'userId',
+      as: 'coachProfile',
+      constraints: false
+    });
   };
 
   return User;
