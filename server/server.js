@@ -13,7 +13,8 @@ const models = require('./models');
 
 // Import des routes
 const authRoutes = require('./routes/auth');
-const referenceRoutes = require('./routes/reference'); // NOUVEAU
+const referenceRoutes = require('./routes/reference');
+const adminRoutes = require('./routes/admin');
 
 // Création de l'application Express
 const app = express();
@@ -39,8 +40,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Routes d'authentification
 app.use('/api/auth', authRoutes);
 
-// Routes des données de référence (NOUVEAU)
+// Routes des données de référence
 app.use('/api/reference', referenceRoutes);
+
+// Routes de l'administarteur
+app.use('/api/admin', adminRoutes);
 
 // Route de santé générale
 app.get('/api/health', (req, res) => {
@@ -91,7 +95,7 @@ app.get('/api/db-test', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to Portall API',
-    version: '1.1.0', // Version mise à jour
+    version: '1.2.0', // Version mise à jour
     documentation: 'Coming soon',
     endpoints: {
       health: '/api/health',
@@ -107,7 +111,7 @@ app.get('/', (req, res) => {
         forgotPassword: 'POST /api/auth/forgot-password',
         resetPassword: 'POST /api/auth/reset-password'
       },
-      reference: { // NOUVEAU
+      reference: {
         base: '/api/reference',
         health: '/api/reference/health',
         njcaaColleges: 'GET /api/reference/njcaa-colleges',
@@ -118,6 +122,16 @@ app.get('/', (req, res) => {
           updateNJCAACollege: 'PUT /api/reference/njcaa-colleges/:id',
           createNCAACollege: 'POST /api/reference/ncaa-colleges'
         }
+      },
+      admin: {
+        base: '/api/admin',
+        health: '/api/admin/health',
+        dashboard: 'GET /api/admin/dashboard',
+        pendingUsers: 'GET /api/admin/users/pending',
+        userDetails: 'GET /api/admin/users/:userId',
+        approveUser: 'POST /api/admin/users/:userId/approve',
+        rejectUser: 'POST /api/admin/users/:userId/reject',
+        auditLog: 'GET /api/admin/audit/actions'
       }
     }
   });
