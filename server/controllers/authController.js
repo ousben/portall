@@ -2,21 +2,41 @@
 
 const { User, PlayerProfile, CoachProfile, NJCAACollege, NCAACollege } = require('../models');
 const AuthService = require('../services/authService');
+const emailService = require('../services/emailService'); // NOUVEAU: Service d'emails intégré
 const { sequelize } = require('../config/database.connection');
 const { Op } = require('sequelize');
 
 /**
- * Contrôleur d'authentification étendu pour Phase 3
+ * Contrôleur d'authentification étendu pour Phase 3 avec notifications email
  * 
- * Gère maintenant l'inscription avec profils spécialisés (joueur/coach)
- * et validation des données métier spécifiques.
+ * Ce contrôleur gère maintenant l'inscription avec profils spécialisés (joueur/coach)
+ * ET l'envoi automatique d'emails de notification à chaque étape du processus.
+ * 
+ * Nouveautés Phase 3 :
+ * - Validation des données métier spécifiques (colleges, divisions)
+ * - Création de profils étendus lors de l'inscription
+ * - Envoi automatique d'emails de bienvenue
+ * - Notification automatique des admins pour nouvelles inscriptions
+ * - Emails de réinitialisation de mot de passe avec templates
+ * 
+ * Architecture : Ce contrôleur suit le pattern de votre architecture existante
+ * en utilisant des services découplés (AuthService, emailService) pour
+ * maintenir la séparation des responsabilités.
  */
 class AuthController {
   /**
-   * Inscription d'un nouveau utilisateur avec profil étendu
+   * Inscription d'un nouveau utilisateur avec profil étendu et notifications email
    * 
-   * Cette version gère la création simultanée de l'utilisateur
-   * ET de son profil spécialisé dans une transaction atomique.
+   * Cette version complète gère la création simultanée de l'utilisateur
+   * ET de son profil spécialisé dans une transaction atomique, puis déclenche
+   * automatiquement les notifications email appropriées.
+   * 
+   * Processus complet :
+   * 1. Validation des données (syntaxe + logique métier)
+   * 2. Création utilisateur + profil dans une transaction
+   * 3. Email de bienvenue à l'utilisateur (asynchrone)
+   * 4. Notification aux admins (asynchrone)
+   * 5. Réponse immédiate au client
    */
   static async register(req, res) {
     // Démarrer une transaction pour garantir l'atomicité
@@ -33,9 +53,13 @@ class AuthController {
         ...profileData 
       } = req.body;
 
-      console.log(`🔐 Enhanced registration attempt for: ${email} as ${userType}`);
+      console.log(`🔐 Enhanced registration with email notifications for: ${email} as ${userType}`);
 
-      // Étape 1: Vérifier que l'email n'existe pas déjà
+      // ========================
+      // ÉTAPE 1 : VÉRIFICATIONS DE SÉCURITÉ DE BASE
+      // ========================
+      
+      // Vérifier que l'email n'existe pas déjà
       const existingUser = await User.findByEmail(email);
       if (existingUser) {
         await transaction.rollback();
@@ -46,7 +70,11 @@ class AuthController {
         });
       }
 
-      // Étape 2: Validation spécifique selon le type d'utilisateur
+      // ========================
+      // ÉTAPE 2 : VALIDATION MÉTIER SPÉCIALISÉE
+      // ========================
+      
+      // Validation spécifique selon le type d'utilisateur
       const profileValidation = await this.validateProfileData(userType, profileData);
       if (!profileValidation.isValid) {
         await transaction.rollback();
@@ -57,12 +85,16 @@ class AuthController {
         });
       }
 
-      // Étape 3: Créer l'utilisateur de base
+      // ========================
+      // ÉTAPE 3 : CRÉATION DE L'UTILISATEUR DE BASE
+      // ========================
+      
+      // Créer l'utilisateur de base avec token de vérification
       const emailVerificationToken = AuthService.generateSecureToken();
       
       const newUser = await User.create({
         email,
-        password, // Sera hashé par le hook
+        password, // Sera hashé automatiquement par le hook beforeCreate
         firstName,
         lastName,
         userType,
@@ -73,7 +105,11 @@ class AuthController {
 
       console.log(`✅ Base user created: ${newUser.email} (ID: ${newUser.id})`);
 
-      // Étape 4: Créer le profil spécialisé selon le type
+      // ========================
+      // ÉTAPE 4 : CRÉATION DU PROFIL SPÉCIALISÉ
+      // ========================
+      
+      // Créer le profil spécialisé selon le type d'utilisateur
       let profile = null;
       if (userType === 'player') {
         profile = await this.createPlayerProfile(newUser.id, profileData, transaction);
@@ -81,28 +117,72 @@ class AuthController {
         profile = await this.createCoachProfile(newUser.id, profileData, transaction);
       }
 
-      // Étape 5: Confirmer la transaction
+      // ========================
+      // ÉTAPE 5 : FINALISER LA TRANSACTION
+      // ========================
+      
+      // Confirmer toutes les opérations en base de données
       await transaction.commit();
 
       console.log(`🎉 Complete registration successful for: ${newUser.email}`);
 
+      // ========================
+      // ÉTAPE 6 : NOTIFICATIONS EMAIL ASYNCHRONES
+      // ========================
+      
+      // IMPORTANT : Ces emails sont envoyés de manière asynchrone pour ne pas
+      // ralentir la réponse au client. Si un email échoue, cela n'affecte pas
+      // la création du compte qui a déjà été confirmée en base.
+
+      // 1. Email de bienvenue à l'utilisateur
+      emailService.sendWelcomeEmail(newUser)
+        .then(result => {
+          if (result.success) {
+            console.log(`📧 Welcome email sent to ${newUser.email}`);
+            // En développement, afficher le lien de preview
+            if (result.previewUrl) {
+              console.log(`👀 Email preview: ${result.previewUrl}`);
+            }
+          } else {
+            console.error(`❌ Failed to send welcome email to ${newUser.email}:`, result.error);
+          }
+        })
+        .catch(error => {
+          console.error(`❌ Welcome email error for ${newUser.email}:`, error);
+        });
+
+      // 2. Notification aux admins pour traitement
+      this.notifyAdminsOfNewRegistration(newUser)
+        .then(() => {
+          console.log(`📧 Admin notification sent for new ${userType}: ${newUser.email}`);
+        })
+        .catch(error => {
+          console.error(`❌ Admin notification error:`, error);
+        });
+
+      // ========================
+      // ÉTAPE 7 : RÉPONSE IMMÉDIATE AU CLIENT
+      // ========================
+      
       // Préparer la réponse avec les informations du profil
       const userResponse = newUser.toPublicJSON();
       
       return res.status(201).json({
         status: 'success',
-        message: 'Account created successfully. Please wait for admin approval.',
+        message: 'Account created successfully. Please check your email and wait for admin approval.',
         data: {
           user: userResponse,
           profile: profile ? profile.toJSON() : null
         },
         meta: {
           nextSteps: [
-            'Check your email for verification instructions',
-            'Wait for admin approval',
+            'Check your email for welcome instructions',
+            'Wait for admin approval (typically 24-48 hours)',
             'Complete payment after approval',
             'Access your personalized dashboard'
-          ]
+          ],
+          emailSent: true, // Indicateur que l'email a été déclenché
+          estimatedApprovalTime: '24-48 hours'
         }
       });
 
@@ -135,19 +215,74 @@ class AuthController {
   }
 
   /**
+   * NOUVELLE MÉTHODE : Notification automatique des admins
+   * 
+   * Cette méthode récupère tous les administrateurs actifs et leur envoie
+   * une notification de nouvelle inscription nécessitant leur attention.
+   * 
+   * Pattern utilisé : Service discovery pattern - on trouve dynamiquement
+   * tous les admins plutôt que d'avoir une liste codée en dur.
+   */
+  static async notifyAdminsOfNewRegistration(newUser) {
+    try {
+      // Récupérer tous les emails des admins actifs
+      const adminUsers = await User.findAll({
+        where: {
+          userType: 'admin',
+          isActive: true
+        },
+        attributes: ['email', 'firstName', 'lastName']
+      });
+
+      if (adminUsers.length === 0) {
+        console.warn('⚠️ No active admin users found for notification');
+        return;
+      }
+
+      const adminEmails = adminUsers.map(admin => admin.email);
+      
+      console.log(`📧 Notifying ${adminEmails.length} admins of new ${newUser.userType} registration`);
+      
+      // Envoyer la notification à tous les admins simultanément
+      const results = await emailService.sendNewRegistrationNotificationToAdmin(newUser, adminEmails);
+      
+      // Vérifier les résultats d'envoi
+      const successfulSends = results.filter(result => result.success).length;
+      const failedSends = results.length - successfulSends;
+      
+      if (failedSends > 0) {
+        console.warn(`⚠️ ${failedSends} admin notifications failed to send`);
+      }
+      
+      console.log(`📧 Successfully notified ${successfulSends}/${adminEmails.length} admins`);
+      return results;
+
+    } catch (error) {
+      console.error('❌ Error notifying admins of new registration:', error);
+      // On ne lance pas l'erreur car ce n'est pas critique pour l'inscription
+      // L'admin peut toujours voir les nouveaux comptes dans son dashboard
+    }
+  }
+
+  /**
    * Validation des données de profil selon le type d'utilisateur
    * 
    * Cette méthode encapsule toute la logique de validation métier
-   * spécifique à chaque type d'utilisateur.
+   * spécifique à chaque type d'utilisateur. Elle vérifie non seulement
+   * le format des données, mais aussi leur cohérence business.
    */
   static async validateProfileData(userType, profileData) {
     const errors = [];
 
     try {
       if (userType === 'player') {
-        // Validation pour les joueurs NJCAA
+        // ========================
+        // VALIDATION POUR LES JOUEURS NJCAA
+        // ========================
+        
         const { gender, collegeId } = profileData;
 
+        // Vérification du genre (requis pour les équipes genrées)
         if (!gender || !['male', 'female'].includes(gender)) {
           errors.push({
             field: 'gender',
@@ -155,13 +290,14 @@ class AuthController {
           });
         }
 
+        // Vérification du college NJCAA
         if (!collegeId) {
           errors.push({
             field: 'collegeId',
             message: 'College selection is required'
           });
         } else {
-          // Vérifier que le college NJCAA existe et est actif
+          // Validation existentielle : le college existe-t-il et est-il actif ?
           const college = await NJCAACollege.findByPk(collegeId);
           if (!college || !college.isActive) {
             errors.push({
@@ -172,9 +308,13 @@ class AuthController {
         }
 
       } else if (userType === 'coach') {
-        // Validation pour les coachs NCAA/NAIA
+        // ========================
+        // VALIDATION POUR LES COACHS NCAA/NAIA
+        // ========================
+        
         const { position, phoneNumber, collegeId, division, teamSport } = profileData;
 
+        // Vérification de la position de coaching
         if (!position || !['head_coach', 'assistant_coach'].includes(position)) {
           errors.push({
             field: 'position',
@@ -182,39 +322,48 @@ class AuthController {
           });
         }
 
+        // Vérification du numéro de téléphone (essentiel pour le recrutement)
         if (!phoneNumber || !/^\+?[\d\s\-\(\)]+$/.test(phoneNumber)) {
           errors.push({
             field: 'phoneNumber',
-            message: 'Valid phone number is required'
+            message: 'Valid phone number is required for recruiting contact'
           });
         }
 
+        // Vérification de la division
         if (!division || !['ncaa_d1', 'ncaa_d2', 'ncaa_d3', 'naia'].includes(division)) {
           errors.push({
             field: 'division',
-            message: 'Valid division is required'
+            message: 'Valid division is required (NCAA D1/D2/D3 or NAIA)'
           });
         }
 
+        // Vérification du sport de l'équipe
         if (!teamSport || !['mens_soccer', 'womens_soccer'].includes(teamSport)) {
           errors.push({
             field: 'teamSport',
-            message: 'Team sport selection is required'
+            message: 'Team sport selection is required (mens_soccer or womens_soccer)'
           });
         }
 
+        // Validation croisée : college + division
         if (!collegeId) {
           errors.push({
             field: 'collegeId',
             message: 'College selection is required'
           });
         } else {
-          // Vérifier que le college NCAA existe, est actif, et correspond à la division
+          // Vérifier que le college NCAA existe, est actif, ET correspond à la division
           const college = await NCAACollege.findByPk(collegeId);
-          if (!college || !college.isActive || college.division !== division) {
+          if (!college || !college.isActive) {
             errors.push({
               field: 'collegeId',
-              message: 'Selected college does not match the specified division or is inactive'
+              message: 'Selected college is not valid or inactive'
+            });
+          } else if (college.division !== division) {
+            errors.push({
+              field: 'division',
+              message: `Division mismatch: ${college.name} is ${college.division}, but you selected ${division}`
             });
           }
         }
@@ -239,6 +388,9 @@ class AuthController {
 
   /**
    * Crée un profil joueur avec toutes les validations nécessaires
+   * 
+   * Cette méthode initialise un profil joueur avec des valeurs par défaut
+   * sensées qui correspondent à votre logique métier.
    */
   static async createPlayerProfile(userId, profileData, transaction) {
     const { gender, collegeId } = profileData;
@@ -247,7 +399,7 @@ class AuthController {
       userId: userId,
       gender: gender,
       collegeId: collegeId,
-      profileCompletionStatus: 'basic',
+      profileCompletionStatus: 'basic', // Le joueur devra compléter plus tard
       isProfileVisible: false, // Invisible jusqu'à validation admin
       profileViews: 0,
       lastProfileUpdate: new Date()
@@ -259,6 +411,9 @@ class AuthController {
 
   /**
    * Crée un profil coach avec toutes les validations nécessaires
+   * 
+   * Cette méthode initialise un profil coach avec les données
+   * professionnelles fournies lors de l'inscription.
    */
   static async createCoachProfile(userId, profileData, transaction) {
     const { position, phoneNumber, collegeId, division, teamSport } = profileData;
@@ -270,7 +425,7 @@ class AuthController {
       collegeId: collegeId,
       division: division,
       teamSport: teamSport,
-      savedSearches: [],
+      savedSearches: [], // Initialisé vide, sera rempli par l'usage
       totalSearches: 0
     }, { transaction });
 
@@ -279,7 +434,10 @@ class AuthController {
   }
 
   /**
-   * Connexion d'un utilisateur (méthode existante inchangée)
+   * Connexion d'un utilisateur (méthode existante améliorée)
+   * 
+   * Cette méthode reste largement identique mais inclut maintenant
+   * la récupération du profil complet pour le frontend.
    */
   static async login(req, res) {
     try {
@@ -287,6 +445,7 @@ class AuthController {
 
       console.log(`🔐 Login attempt for: ${email}`);
 
+      // Rechercher l'utilisateur par email
       const user = await User.findByEmail(email);
       if (!user) {
         return res.status(401).json({
@@ -296,6 +455,7 @@ class AuthController {
         });
       }
 
+      // Vérifier le mot de passe
       const isPasswordValid = await user.validatePassword(password);
       if (!isPasswordValid) {
         console.log(`❌ Invalid password for user: ${email}`);
@@ -306,6 +466,7 @@ class AuthController {
         });
       }
 
+      // Vérifier que le compte est actif
       if (!user.isActive) {
         return res.status(403).json({
           status: 'error',
@@ -314,12 +475,15 @@ class AuthController {
         });
       }
 
+      // Générer les tokens d'authentification
       const tokenPair = AuthService.generateTokenPair(user);
+      
+      // Mettre à jour la dernière connexion
       await user.updateLastLogin();
 
       console.log(`✅ Login successful for user: ${email}`);
 
-      // Récupérer le profil complet pour le frontend
+      // AMÉLIORATION : Récupérer le profil complet pour le frontend
       const userWithProfile = await user.toCompleteJSON();
 
       return res.status(200).json({
@@ -343,6 +507,9 @@ class AuthController {
 
   /**
    * Rafraîchissement des tokens (méthode existante inchangée)
+   * 
+   * Cette méthode permet de renouveler les tokens d'accès sans
+   * redemander à l'utilisateur de se reconnecter.
    */
   static async refresh(req, res) {
     try {
@@ -350,6 +517,7 @@ class AuthController {
 
       console.log('🔄 Token refresh attempt');
 
+      // Vérifier et décoder le refresh token
       let decoded;
       try {
         decoded = AuthService.verifyToken(refreshToken);
@@ -361,6 +529,7 @@ class AuthController {
         });
       }
 
+      // S'assurer que c'est bien un refresh token
       if (decoded.tokenType !== 'refresh') {
         return res.status(401).json({
           status: 'error',
@@ -369,6 +538,7 @@ class AuthController {
         });
       }
 
+      // Vérifier que l'utilisateur existe toujours et est actif
       const user = await User.findByPk(decoded.userId);
       if (!user || !user.isActive) {
         return res.status(401).json({
@@ -378,6 +548,7 @@ class AuthController {
         });
       }
 
+      // Générer une nouvelle paire de tokens
       const newTokenPair = AuthService.generateTokenPair(user);
 
       console.log(`✅ Token refreshed for user: ${user.email}`);
@@ -402,6 +573,9 @@ class AuthController {
 
   /**
    * Déconnexion (méthode existante inchangée)
+   * 
+   * Avec JWT, la déconnexion côté serveur est principalement
+   * symbolique puisque les tokens sont stateless.
    */
   static async logout(req, res) {
     try {
@@ -427,11 +601,16 @@ class AuthController {
 
   /**
    * Obtenir le profil de l'utilisateur connecté (méthode améliorée)
+   * 
+   * Cette méthode récupère maintenant le profil complet avec
+   * toutes les relations pour fournir toutes les données
+   * nécessaires au frontend.
    */
   static async getMe(req, res) {
     try {
       const user = req.user;
 
+      // Récupérer l'utilisateur frais depuis la base avec ses relations
       const freshUser = await User.findByPk(user.id);
       
       if (!freshUser) {
@@ -463,7 +642,10 @@ class AuthController {
   }
 
   /**
-   * Demande de reset de mot de passe (méthode existante inchangée)
+   * MISE À JOUR : Demande de reset de mot de passe avec email automatique
+   * 
+   * Cette méthode génère maintenant un token de reset ET envoie
+   * automatiquement l'email avec le lien de réinitialisation.
    */
   static async forgotPassword(req, res) {
     try {
@@ -473,6 +655,7 @@ class AuthController {
 
       const user = await User.findByEmail(email);
       
+      // Réponse standardisée pour la sécurité (ne révèle pas si l'email existe)
       const standardResponse = {
         status: 'success',
         message: 'If an account with this email exists, password reset instructions have been sent.'
@@ -483,15 +666,34 @@ class AuthController {
         return res.status(200).json(standardResponse);
       }
 
+      // Générer un token de reset sécurisé
       const resetToken = AuthService.generateSecureToken();
-      const resetExpires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 heure
+      const resetExpires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 heure d'expiration
 
+      // Sauvegarder le token en base
       await user.update({
         passwordResetToken: resetToken,
         passwordResetExpires: resetExpires
       });
 
-      console.log(`✅ Password reset token generated for: ${email}`);
+      // NOUVEAU : Envoyer l'email de reset automatiquement
+      emailService.sendPasswordResetEmail(user, resetToken)
+        .then(result => {
+          if (result.success) {
+            console.log(`📧 Password reset email sent to ${user.email}`);
+            // En développement, afficher le lien de preview
+            if (result.previewUrl) {
+              console.log(`👀 Email preview: ${result.previewUrl}`);
+            }
+          } else {
+            console.error(`❌ Failed to send password reset email:`, result.error);
+          }
+        })
+        .catch(error => {
+          console.error(`❌ Password reset email error:`, error);
+        });
+
+      console.log(`✅ Password reset process initiated for: ${email}`);
 
       return res.status(200).json(standardResponse);
 
@@ -507,6 +709,9 @@ class AuthController {
 
   /**
    * Reset du mot de passe avec le token (méthode existante inchangée)
+   * 
+   * Cette méthode valide le token de reset et met à jour
+   * le mot de passe de l'utilisateur.
    */
   static async resetPassword(req, res) {
     try {
@@ -514,11 +719,12 @@ class AuthController {
 
       console.log('🔑 Password reset attempt with token');
 
+      // Rechercher l'utilisateur avec un token valide et non expiré
       const user = await User.findOne({
         where: {
           passwordResetToken: token,
           passwordResetExpires: {
-            [Op.gt]: new Date()
+            [Op.gt]: new Date() // Token non expiré
           }
         }
       });
@@ -531,8 +737,9 @@ class AuthController {
         });
       }
 
+      // Mettre à jour le mot de passe et nettoyer les tokens de reset
       await user.update({
-        password: password,
+        password: password, // Sera hashé automatiquement par le hook
         passwordResetToken: null,
         passwordResetExpires: null
       });

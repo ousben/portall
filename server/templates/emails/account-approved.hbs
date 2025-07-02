@@ -1,0 +1,87 @@
+<!-- portall/server/templates/emails/account-approved.hbs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Approved - Portall</title>
+  <style>
+    /* Styles similaires au template welcome mais avec thème vert pour succès */
+  	body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background-color: #f8fafc;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .success-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    .cta-button {
+      display: inline-block;
+      background-color: #2563eb;
+      color: white;
+      padding: 15px 30px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      margin: 20px 0;
+    }
+    /* Autres styles similaires... */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+    	<div class="success-icon">🎉</div>
+      <h1>Account Approved!</h1>
+      <p>You're ready to start your journey</p>
+    </div>
+
+    <div class="content">
+      <h2>Congratulations, {{firstName}}!</h2>
+            
+      <p>Great news! Your Portall account has been approved by {{approvedBy}}. You now have full access to all platform features.</p>
+
+      <a href="{{loginUrl}}" class="cta-button">Log In to Your Account</a>
+
+      <div class="next-steps">
+        <h3>Ready to get started?</h3>
+        {{#if (eq userType 'player')}}
+        <ul>
+          <li>Complete your athletic profile with stats and achievements</li>
+          <li>Upload game highlights and skill videos</li>
+          <li>Browse interested coaches and programs</li>
+          <li>Start connecting with NCAA/NAIA opportunities</li>
+        </ul>
+        {{else}}
+        <ul>
+          <li>Set up your search preferences and filters</li>
+          <li>Browse talented NJCAA players in your region</li>
+          <li>Save promising prospects to your favorites</li>
+          <li>Start building your recruiting pipeline</li>
+        </ul>
+        {{/if}}
+      </div>
+
+      <p>If you need any assistance getting started, our support team is here to help at support@portall.com.</p>
+
+      <p>Welcome to the active community!</p>
+      <p><strong>The Portall Team</strong></p>
+    </div>
+  </div>
+</body>
+</html>

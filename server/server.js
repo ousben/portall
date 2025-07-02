@@ -162,6 +162,11 @@ app.use('*', (req, res) => {
   });
 });
 
+if (process.env.NODE_ENV === 'development') {
+  const testEmailRoutes = require('./routes/test-email');
+  app.use('/api/test/email', testEmailRoutes);
+}
+
 // Fonction pour démarrer le serveur
 const startServer = async () => {
   try {

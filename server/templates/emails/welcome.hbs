@@ -1,0 +1,130 @@
+<!-- portall/server/templates/emails/welcome.hbs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Portall</title>
+  <style>
+    /* Styles inline pour compatibilité email */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background-color: #f8fafc;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .logo {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .welcome-message {
+      font-size: 24px;
+      color: #2563eb;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+    .user-type-badge {
+      display: inline-block;
+      background-color: #10b981;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      margin: 20px 0;
+    }
+    .next-steps {
+      background-color: #f0f9ff;
+      border-left: 4px solid #2563eb;
+      padding: 20px;
+      margin: 30px 0;
+    }
+    .footer {
+      background-color: #1f2937;
+      color: #9ca3af;
+      padding: 30px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header avec branding -->
+  	<div class="header">
+      <div class="logo">⚽ Portall</div>
+      <p>Connecting Soccer Talent with Opportunities</p>
+    </div>
+
+    <!-- Contenu principal -->
+    <div class="content">
+      <div class="welcome-message">Welcome to Portall, {{firstName}}! 🎉</div>
+
+      <p>Thank you for joining the premier platform connecting NJCAA soccer players with NCAA and NAIA opportunities.</p>
+
+      <div class="user-type-badge">
+        {{#if (eq userType 'player')}}
+          NJCAA Player
+        {{else}}
+          NCAA/NAIA Coach
+        {{/if}}
+      </div>
+
+      <p>Your account has been created successfully and is currently pending admin approval. This review process helps us maintain the quality and safety of our platform for all users.</p>
+
+      <div class="next-steps">
+        <h3>What happens next?</h3>
+        <ol>
+          <li><strong>Review:</strong> Our team will review your application within 24-48 hours</li>
+          <li><strong>Notification:</strong> You'll receive an email once your account is approved</li>
+          <li><strong>Complete Profile:</strong> Fill out your detailed {{#if (eq userType 'player')}}athletic{{else}}coaching{{/if}} profile</li>
+          <li><strong>Start Connecting:</strong> Begin building meaningful recruiting relationships</li>
+        </ol>
+      </div>
+
+      {{#if (eq userType 'player')}}
+        <p>As an NJCAA player, you'll soon have access to showcase your talents to NCAA and NAIA coaches actively seeking talent like yours.</p>
+      {{else}}
+        <p>As an NCAA/NAIA coach, you'll soon be able to discover and evaluate talented NJCAA players ready to take the next step in their athletic careers.</p>
+      {{/if}}
+
+      <p>If you have any questions, please don't hesitate to reach out to our support team at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
+
+      <p>Welcome to the Portall family!</p>
+      <p><strong>The Portall Team</strong></p>
+    </div>
+
+    <!-- Footer -->
+  	<div class="footer">
+      <p>&copy; 2025 Portall. All rights reserved.</p>
+      <p>
+        <a href="#">Privacy Policy</a> |
+        <a href="#">Terms of Service</a> |
+        <a href="mailto:{{supportEmail}}">Contact Support</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
