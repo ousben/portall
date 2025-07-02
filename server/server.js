@@ -46,6 +46,14 @@ app.use('/api/reference', referenceRoutes);
 // Routes de l'administarteur
 app.use('/api/admin', adminRoutes);
 
+// NOUVEAU : Routes de test pour les emails (uniquement en développement)
+if (process.env.NODE_ENV === 'development') {
+  console.log('🧪 Loading test email routes for development');
+  const testEmailRoutes = require('./routes/test-email');
+  app.use('/api/test/email', testEmailRoutes);
+  console.log('✅ Test email routes loaded at /api/test/email');
+}
+
 // Route de santé générale
 app.get('/api/health', (req, res) => {
   res.json({
@@ -56,8 +64,12 @@ app.get('/api/health', (req, res) => {
     database: 'Connected',
     services: {
       auth: '/api/auth/health',
-      reference: '/api/reference/health', // NOUVEAU
-      database: 'Connected'
+      reference: '/api/reference/health',
+      admin: '/api/admin/health',
+      database: 'Connected',
+      ...(process.env.NODE_ENV === 'development' && {
+        emailTest: '/api/test/email/health'
+      })
     }
   });
 });
@@ -132,7 +144,14 @@ app.get('/', (req, res) => {
         approveUser: 'POST /api/admin/users/:userId/approve',
         rejectUser: 'POST /api/admin/users/:userId/reject',
         auditLog: 'GET /api/admin/audit/actions'
-      }
+      },
+      ...(process.env.NODE_ENV === 'development' && {
+        testing: {
+          emailHealth: '/api/test/email/health',
+          emailTest: '/api/test/email/send-test',
+          emailTemplates: '/api/test/email/templates'
+        }
+      })
     }
   });
 });
@@ -161,11 +180,6 @@ app.use('*', (req, res) => {
     availableEndpoints: '/'
   });
 });
-
-if (process.env.NODE_ENV === 'development') {
-  const testEmailRoutes = require('./routes/test-email');
-  app.use('/api/test/email', testEmailRoutes);
-}
 
 // Fonction pour démarrer le serveur
 const startServer = async () => {

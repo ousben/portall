@@ -4,42 +4,33 @@ const nodemailer = require('nodemailer');
 const fs = require('fs').promises;
 const path = require('path');
 const handlebars = require('handlebars');
+require('../templates/emails/helpers');
 
 /**
  * Service d'email professionnel pour Portall avec support Gmail optimisé
  * 
- * Cette version du service gère intelligemment différents fournisseurs d'email
- * selon l'environnement. En développement, nous utilisons Gmail pour sa simplicité
- * et sa fiabilité. En production, nous basculons vers des services industriels.
- * 
- * Analogie : C'est comme avoir une boîte à outils avec différents outils
- * pour différentes situations - un marteau léger pour les petits travaux
- * (Gmail en dev) et un marteau pneumatique pour les gros chantiers (SendGrid en prod).
+ * Cette version corrigée utilise la bonne syntaxe Nodemailer.
+ * L'erreur précédente venait de l'utilisation de createTransporter 
+ * au lieu de createTransport (sans le "er").
  */
 class EmailService {
   constructor() {
     this.transporter = null;
     this.templatesCache = new Map();
     this.isInitialized = false;
-    this.emailProvider = null; // Nouveau : tracker du provider utilisé
+    this.emailProvider = null;
   }
 
   /**
    * Initialise le service email avec détection intelligente du provider
    * 
-   * Cette méthode analyse l'environnement et configure automatiquement
-   * le bon provider SMTP. Elle gère les spécificités de chaque service
-   * pour optimiser la délivrabilité et les performances.
+   * CORRECTION MAJEURE : Utilisation de createTransport au lieu de createTransporter
    */
   async initialize() {
     try {
       const isDevelopment = process.env.NODE_ENV === 'development';
       
       if (isDevelopment) {
-        // ========================
-        // CONFIGURATION GMAIL POUR DÉVELOPPEMENT
-        // ========================
-        
         console.log('📧 Initializing Gmail service for development...');
         
         // Vérifier que les variables d'environnement Gmail sont configurées
@@ -47,34 +38,31 @@ class EmailService {
           throw new Error('Gmail credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD');
         }
         
-        this.transporter = nodemailer.createTransporter({
-          service: 'gmail', // Utilise la configuration prédéfinie Gmail de Nodemailer
+        // CORRECTION : createTransport au lieu de createTransporter
+        this.transporter = nodemailer.createTransport({
+          service: 'gmail',
           auth: {
-            user: process.env.GMAIL_USER, // Votre adresse Gmail complète
-            pass: process.env.GMAIL_APP_PASSWORD // Le mot de passe d'application généré
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_APP_PASSWORD
           },
           // Options spécifiques à Gmail pour optimiser la délivrabilité
-          pool: true, // Réutilise les connexions SMTP pour de meilleures performances
-          maxConnections: 5, // Limite les connexions simultanées (Gmail a des limites)
-          maxMessages: 100, // Nombre max d'emails par connexion
-          rateDelta: 1000, // Délai minimum entre les emails (1 seconde)
-          rateLimit: 5 // Max 5 emails par seconde
+          pool: true,
+          maxConnections: 5,
+          maxMessages: 100,
+          rateDelta: 1000,
+          rateLimit: 5
         });
         
         this.emailProvider = 'gmail';
         console.log(`✅ Gmail service initialized for ${process.env.GMAIL_USER}`);
         
       } else {
-        // ========================
-        // CONFIGURATION PRODUCTION (SendGrid, AWS SES, etc.)
-        // ========================
-        
+        // Configuration production avec la même correction
         console.log('📧 Initializing production email service...');
         
-        // Vous pouvez basculer entre différents providers selon vos variables d'env
         if (process.env.SENDGRID_API_KEY) {
-          // Configuration SendGrid
-          this.transporter = nodemailer.createTransporter({
+          // CORRECTION : createTransport au lieu de createTransporter
+          this.transporter = nodemailer.createTransport({
             host: 'smtp.sendgrid.net',
             port: 587,
             secure: false,
@@ -86,8 +74,8 @@ class EmailService {
           this.emailProvider = 'sendgrid';
           
         } else if (process.env.AWS_SES_REGION) {
-          // Configuration AWS SES
-          this.transporter = nodemailer.createTransporter({
+          // CORRECTION : createTransport au lieu de createTransporter
+          this.transporter = nodemailer.createTransport({
             host: `email-smtp.${process.env.AWS_SES_REGION}.amazonaws.com`,
             port: 587,
             secure: false,
@@ -99,8 +87,8 @@ class EmailService {
           this.emailProvider = 'aws-ses';
           
         } else {
-          // Fallback vers configuration SMTP générique
-          this.transporter = nodemailer.createTransporter({
+          // CORRECTION : createTransport au lieu de createTransporter
+          this.transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
             port: parseInt(process.env.SMTP_PORT) || 587,
             secure: process.env.SMTP_SECURE === 'true',
@@ -124,11 +112,13 @@ class EmailService {
     } catch (error) {
       console.error('❌ Email service initialization failed:', error);
       
-      // Fournir des messages d'erreur spécifiques selon le contexte
+      // Messages d'aide spécifiques selon le type d'erreur
       if (error.message.includes('Gmail credentials')) {
         console.error('💡 Gmail setup help: Please configure GMAIL_USER and GMAIL_APP_PASSWORD in your .env file');
       } else if (error.code === 'EAUTH') {
         console.error('💡 Authentication failed: Please verify your Gmail App Password is correct');
+      } else if (error.code === 'ECONNECTION') {
+        console.error('💡 Connection failed: Check your internet connection and firewall settings');
       }
       
       throw new Error(`Email service initialization failed: ${error.message}`);
@@ -137,9 +127,6 @@ class EmailService {
 
   /**
    * Méthode d'envoi améliorée avec gestion spécifique des providers
-   * 
-   * Cette version adapte le comportement selon le provider utilisé.
-   * Gmail a ses propres spécificités et limitations que nous gérons ici.
    */
   async sendEmail({ to, subject, template, data, priority = 'normal' }) {
     try {
@@ -160,7 +147,6 @@ class EmailService {
         subject: subject,
         html: htmlContent,
         priority: priority,
-        // Headers spécifiques selon le provider
         headers: {
           'X-Portall-Template': template,
           'X-Portall-Priority': priority,
@@ -170,8 +156,6 @@ class EmailService {
 
       // Adaptations spécifiques à Gmail
       if (this.emailProvider === 'gmail') {
-        // Gmail gère automatiquement l'encodage et la délivrabilité
-        // Nous ajoutons juste quelques headers pour le tracking
         mailOptions.headers['X-Portall-Environment'] = 'development';
       }
 
@@ -180,7 +164,6 @@ class EmailService {
       
       console.log(`✅ Email sent successfully via ${this.emailProvider}: ${info.messageId}`);
       
-      // Log spécifique selon le provider
       if (this.emailProvider === 'gmail') {
         console.log(`📧 Gmail delivery: Check your Gmail sent folder for confirmation`);
       }
@@ -189,7 +172,6 @@ class EmailService {
         success: true,
         messageId: info.messageId,
         provider: this.emailProvider,
-        // En développement avec Gmail, pas de preview URL mais confirmation dans Gmail
         deliveryInfo: this.emailProvider === 'gmail' 
           ? 'Email delivered via Gmail - check your sent folder'
           : null
@@ -214,20 +196,15 @@ class EmailService {
   }
 
   /**
-   * NOUVELLE MÉTHODE : Détermine l'adresse d'expéditeur selon le provider
-   * 
-   * Cette méthode gère intelligemment l'adresse "From" selon le contexte.
-   * Gmail nécessite d'utiliser votre adresse Gmail comme expéditeur.
+   * Détermine l'adresse d'expéditeur selon le provider
    */
   getFromAddress() {
     if (this.emailProvider === 'gmail') {
-      // Avec Gmail, nous devons utiliser l'adresse Gmail comme expéditeur
       return {
         name: process.env.EMAIL_FROM_NAME || 'Portall Platform (Dev)',
-        address: process.env.GMAIL_USER // Utilise l'adresse Gmail configurée
+        address: process.env.GMAIL_USER
       };
     } else {
-      // Avec d'autres providers, nous pouvons utiliser une adresse personnalisée
       return {
         name: process.env.EMAIL_FROM_NAME || 'Portall Platform',
         address: process.env.EMAIL_FROM_ADDRESS || 'noreply@portall.com'
@@ -236,10 +213,7 @@ class EmailService {
   }
 
   /**
-   * NOUVELLE MÉTHODE : Vérification de la santé du service email
-   * 
-   * Cette méthode permet de diagnostiquer les problèmes de configuration
-   * et de s'assurer que le service email fonctionne correctement.
+   * Vérification de la santé du service email
    */
   async healthCheck() {
     try {
@@ -282,13 +256,16 @@ class EmailService {
       suggestions.push('Verify Gmail SMTP settings');
     } else if (error.message.includes('credentials')) {
       suggestions.push('Set GMAIL_USER and GMAIL_APP_PASSWORD in your .env file');
+    } else if (error.message.includes('createTransporter')) {
+      suggestions.push('This appears to be a code error - contact development team');
     }
     
     return suggestions;
   }
 
-  // ... (les autres méthodes comme loadTemplate, sendWelcomeEmail, etc. restent identiques)
-  
+  /**
+   * Charge et compile un template email
+   */
   async loadTemplate(templateName) {
     try {
       if (this.templatesCache.has(templateName)) {
@@ -309,7 +286,9 @@ class EmailService {
     }
   }
 
-  // Toutes vos méthodes spécialisées restent identiques
+  /**
+   * Méthodes spécialisées pour chaque type d'email
+   */
   async sendWelcomeEmail(user) {
     const subject = `Welcome to Portall, ${user.firstName}! ⚽`;
     
