@@ -15,6 +15,9 @@ const models = require('./models');
 const authRoutes = require('./routes/auth');
 const referenceRoutes = require('./routes/reference');
 const adminRoutes = require('./routes/admin');
+// NOUVEAUX : Routes dashboard utilisateurs
+const playerRoutes = require('./routes/players');
+const coachRoutes = require('./routes/coaches');
 
 // Création de l'application Express
 const app = express();
@@ -37,14 +40,22 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// ========================
+// ROUTES DE L'APPLICATION
+// ========================
+
 // Routes d'authentification
 app.use('/api/auth', authRoutes);
 
 // Routes des données de référence
 app.use('/api/reference', referenceRoutes);
 
-// Routes de l'administarteur
+// Routes de l'administrateur
 app.use('/api/admin', adminRoutes);
+
+// NOUVEAUX : Routes dashboard utilisateurs
+app.use('/api/players', playerRoutes);
+app.use('/api/coaches', coachRoutes);
 
 // NOUVEAU : Routes de test pour les emails (uniquement en développement)
 if (process.env.NODE_ENV === 'development') {
@@ -54,7 +65,7 @@ if (process.env.NODE_ENV === 'development') {
   console.log('✅ Test email routes loaded at /api/test/email');
 }
 
-// Route de santé générale
+// Route de santé générale mise à jour
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -66,6 +77,8 @@ app.get('/api/health', (req, res) => {
       auth: '/api/auth/health',
       reference: '/api/reference/health',
       admin: '/api/admin/health',
+      players: '/api/players/health',  // NOUVEAU
+      coaches: '/api/coaches/health',  // NOUVEAU
       database: 'Connected',
       ...(process.env.NODE_ENV === 'development' && {
         emailTest: '/api/test/email/health'
@@ -103,12 +116,13 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
-// Route de base avec informations sur l'API
+// Route de base avec informations sur l'API - VERSION MISE À JOUR
 app.get('/', (req, res) => {
   res.json({
     message: 'Welcome to Portall API',
-    version: '1.2.0', // Version mise à jour
+    version: '1.3.0', // Version mise à jour pour Phase 3 complète
     documentation: 'Coming soon',
+    phase: 'Phase 3 - User Management (Dashboard Routes Complete)',
     endpoints: {
       health: '/api/health',
       dbTest: '/api/db-test',
@@ -144,6 +158,33 @@ app.get('/', (req, res) => {
         approveUser: 'POST /api/admin/users/:userId/approve',
         rejectUser: 'POST /api/admin/users/:userId/reject',
         auditLog: 'GET /api/admin/audit/actions'
+      },
+      // NOUVEAUX : Endpoints dashboard utilisateurs
+      players: {
+        base: '/api/players',
+        health: '/api/players/health',
+        dashboard: 'GET /api/players/dashboard',
+        profile: 'GET /api/players/:playerId/profile',
+        analytics: 'GET /api/players/analytics',
+        updateProfile: 'PUT /api/players/profile',
+        toggleVisibility: 'POST /api/players/profile/visibility',
+        search: 'GET /api/players/search',
+        recordView: 'POST /api/players/:playerId/view'
+      },
+      coaches: {
+        base: '/api/coaches',
+        health: '/api/coaches/health',
+        dashboard: 'GET /api/coaches/dashboard',
+        profile: 'GET /api/coaches/:coachId/profile',
+        analytics: 'GET /api/coaches/analytics',
+        updateProfile: 'PUT /api/coaches/profile',
+        favorites: 'GET /api/coaches/favorites',
+        addFavorite: 'POST /api/coaches/favorites/:playerId',
+        removeFavorite: 'DELETE /api/coaches/favorites/:playerId',
+        updateFavorite: 'PUT /api/coaches/favorites/:playerId',
+        savedSearches: 'GET /api/coaches/saved-searches',
+        saveSearch: 'POST /api/coaches/saved-searches',
+        deleteSearch: 'DELETE /api/coaches/saved-searches/:searchId'
       },
       ...(process.env.NODE_ENV === 'development' && {
         testing: {
@@ -204,7 +245,12 @@ const startServer = async () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔐 Auth endpoints available at http://localhost:${PORT}/api/auth`);
-      console.log(`📚 Reference endpoints available at http://localhost:${PORT}/api/reference`); // NOUVEAU
+      console.log(`📚 Reference endpoints available at http://localhost:${PORT}/api/reference`);
+      console.log(`👥 Admin endpoints available at http://localhost:${PORT}/api/admin`);
+      // NOUVEAUX logs pour les routes dashboard
+      console.log(`👤 Player dashboard endpoints available at http://localhost:${PORT}/api/players`);
+      console.log(`🏟️ Coach dashboard endpoints available at http://localhost:${PORT}/api/coaches`);
+      console.log(`✅ Phase 3 User Management Dashboard Routes - COMPLETE`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
