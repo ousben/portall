@@ -743,6 +743,417 @@ class CoachController {
     }
   }
 
+	/**
+   * ➖ Retirer un joueur des favoris
+   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
+   */
+  static async removeFromFavorites(req, res) {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const userId = req.user.id;
+      const { playerId } = req.params;
+
+      console.log(`➖ Removing player ${playerId} from favorites for coach: ${req.user.email}`);
+
+      // Récupération du profil coach
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId },
+        transaction
+      });
+
+      if (!coachProfile) {
+        await transaction.rollback();
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found'
+        });
+      }
+
+      // Vérifier que le favori existe
+      const existingFavorite = await sequelize.query(`
+        SELECT id, player_profile_id FROM coach_favorites 
+        WHERE coach_profile_id = :coachProfileId AND player_profile_id = :playerProfileId
+      `, {
+        replacements: {
+          coachProfileId: coachProfile.id,
+          playerProfileId: playerId
+        },
+        type: sequelize.QueryTypes.SELECT,
+        transaction
+      });
+
+      if (existingFavorite.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({
+          status: 'error',
+          message: 'Player is not in your favorites',
+          code: 'NOT_IN_FAVORITES'
+        });
+      }
+
+      // Supprimer le favori
+      await sequelize.query(`
+        DELETE FROM coach_favorites 
+        WHERE coach_profile_id = :coachProfileId AND player_profile_id = :playerProfileId
+      `, {
+        replacements: {
+          coachProfileId: coachProfile.id,
+          playerProfileId: playerId
+        },
+        transaction
+      });
+
+      await transaction.commit();
+
+      console.log(`✅ Player ${playerId} removed from favorites successfully for coach: ${req.user.email}`);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Player removed from favorites successfully',
+        data: {
+          playerId: playerId,
+          removedAt: new Date()
+        }
+      });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error(`❌ Error removing from favorites for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to remove player from favorites',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * ✏️ Mettre à jour le statut/notes d'un favori
+   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
+   */
+  static async updateFavoriteStatus(req, res) {
+    const transaction = await sequelize.transaction();
+    
+    try {
+      const userId = req.user.id;
+      const { playerId } = req.params;
+      const { priority, recruitmentStatus, notes, lastContacted } = req.body;
+
+      console.log(`✏️ Updating favorite status for player ${playerId} by coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId },
+        transaction
+      });
+
+      if (!coachProfile) {
+        await transaction.rollback();
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found'
+        });
+      }
+
+      // Vérifier que le favori existe
+      const existingFavorite = await sequelize.query(`
+        SELECT * FROM coach_favorites 
+        WHERE coach_profile_id = :coachProfileId AND player_profile_id = :playerProfileId
+      `, {
+        replacements: {
+          coachProfileId: coachProfile.id,
+          playerProfileId: playerId
+        },
+        type: sequelize.QueryTypes.SELECT,
+        transaction
+      });
+
+      if (existingFavorite.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({
+          status: 'error',
+          message: 'Player is not in your favorites',
+          code: 'NOT_IN_FAVORITES'
+        });
+      }
+
+      // Construire l'objet de mise à jour
+      const updateFields = ['updated_at = NOW()'];
+      const replacements = {
+        coachProfileId: coachProfile.id,
+        playerProfileId: playerId
+      };
+
+      if (priority) {
+        updateFields.push('priority_level = :priority');
+        replacements.priority = priority;
+      }
+
+      if (recruitmentStatus) {
+        updateFields.push('recruitment_status = :status');
+        replacements.status = recruitmentStatus;
+      }
+
+      if (notes !== undefined) {
+        updateFields.push('notes = :notes');
+        replacements.notes = notes;
+      }
+
+      if (lastContacted) {
+        updateFields.push('last_contacted = :lastContacted');
+        replacements.lastContacted = lastContacted;
+      }
+
+      // Mettre à jour le favori
+      await sequelize.query(`
+        UPDATE coach_favorites 
+        SET ${updateFields.join(', ')}
+        WHERE coach_profile_id = :coachProfileId AND player_profile_id = :playerProfileId
+      `, {
+        replacements,
+        transaction
+      });
+
+      await transaction.commit();
+
+      console.log(`✅ Favorite status updated successfully for player ${playerId} by coach: ${req.user.email}`);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Favorite status updated successfully',
+        data: {
+          playerId: playerId,
+          updatedFields: Object.keys(req.body),
+          updatedAt: new Date()
+        }
+      });
+
+    } catch (error) {
+      await transaction.rollback();
+      console.error(`❌ Error updating favorite status for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to update favorite status',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * 💾 Récupérer les recherches sauvegardées
+   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
+   */
+  static async getSavedSearches(req, res) {
+    try {
+      const userId = req.user.id;
+
+      console.log(`💾 Loading saved searches for coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found'
+        });
+      }
+
+      // Les recherches sont stockées dans le champ JSON savedSearches
+      const savedSearches = coachProfile.savedSearches || [];
+
+      // Enrichir avec des métadonnées utiles
+      const enrichedSearches = savedSearches.map((search, index) => ({
+        id: search.id || index,
+        name: search.name || `Search ${index + 1}`,
+        criteria: search.criteria || search,
+        createdAt: search.savedAt || search.createdAt || new Date(),
+        lastUsed: search.lastUsed || null,
+        useCount: search.useCount || 0
+      }));
+
+      // Trier par date de création (plus récent en premier)
+      enrichedSearches.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Saved searches retrieved successfully',
+        data: {
+          searches: enrichedSearches,
+          totalCount: enrichedSearches.length,
+          summary: {
+            totalSearches: coachProfile.totalSearches,
+            savedSearches: enrichedSearches.length,
+            mostRecentSearch: enrichedSearches.length > 0 ? enrichedSearches[0].createdAt : null
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error loading saved searches for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to load saved searches',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * ➕ Sauvegarder une nouvelle recherche
+   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
+   */
+  static async saveSearch(req, res) {
+    try {
+      const userId = req.user.id;
+      const searchData = req.body;
+
+      console.log(`➕ Saving new search for coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found'
+        });
+      }
+
+      // Récupérer les recherches existantes
+      const currentSearches = coachProfile.savedSearches || [];
+
+      // Créer la nouvelle recherche avec métadonnées
+      const newSearch = {
+        id: Date.now(), // ID simple basé sur timestamp
+        name: searchData.name || `Search ${currentSearches.length + 1}`,
+        criteria: {
+          gender: searchData.gender,
+          collegeState: searchData.collegeState,
+          collegeRegion: searchData.collegeRegion,
+          profileStatus: searchData.profileStatus,
+          minViews: searchData.minViews,
+          sortBy: searchData.sortBy,
+          sortOrder: searchData.sortOrder
+        },
+        savedAt: new Date(),
+        lastUsed: null,
+        useCount: 0
+      };
+
+      // Ajouter la nouvelle recherche
+      const updatedSearches = [...currentSearches, newSearch];
+
+      // Garder seulement les 20 recherches les plus récentes
+      if (updatedSearches.length > 20) {
+        updatedSearches.splice(0, updatedSearches.length - 20);
+      }
+
+      // Mettre à jour le profil
+      await coachProfile.update({
+        savedSearches: updatedSearches
+      });
+
+      console.log(`✅ Search saved successfully for coach: ${req.user.email}`);
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Search saved successfully',
+        data: {
+          search: newSearch,
+          totalSavedSearches: updatedSearches.length
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error saving search for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to save search',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * 🗑️ Supprimer une recherche sauvegardée
+   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
+   */
+  static async deleteSavedSearch(req, res) {
+    try {
+      const userId = req.user.id;
+      const { searchId } = req.params;
+
+      console.log(`🗑️ Deleting saved search ${searchId} for coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found'
+        });
+      }
+
+      // Récupérer les recherches existantes
+      const currentSearches = coachProfile.savedSearches || [];
+
+      // Trouver l'index de la recherche à supprimer
+      const searchIndex = currentSearches.findIndex(search => 
+        search.id === parseInt(searchId) || search.id === searchId
+      );
+
+      if (searchIndex === -1) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Saved search not found',
+          code: 'SEARCH_NOT_FOUND'
+        });
+      }
+
+      // Supprimer la recherche
+      const deletedSearch = currentSearches[searchIndex];
+      const updatedSearches = currentSearches.filter((_, index) => index !== searchIndex);
+
+      // Mettre à jour le profil
+      await coachProfile.update({
+        savedSearches: updatedSearches
+      });
+
+      console.log(`✅ Search deleted successfully for coach: ${req.user.email}`);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Saved search deleted successfully',
+        data: {
+          deletedSearch: {
+            id: deletedSearch.id,
+            name: deletedSearch.name,
+            deletedAt: new Date()
+          },
+          remainingSearches: updatedSearches.length
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error deleting saved search for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to delete saved search',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
   // ========================
   // MÉTHODES UTILITAIRES PRIVÉES POUR COACHS
   // ========================
