@@ -1,0 +1,407 @@
+/* portall/client/src/assets/styles/dashboard.css */
+
+/* 
+ * Styles communs pour tous les dashboards utilisateurs
+ * 
+ * Ces styles suivent votre système de design établi avec les variables CSS
+ * et maintiennent la cohérence visuelle à travers toute l'application.
+ */
+
+/* ========================
+   LAYOUT PRINCIPAL DU DASHBOARD
+   ======================== */
+
+.dashboard-container {
+  min-height: 100vh;
+  background-color: var(--color-gray-50);
+  padding: var(--spacing-lg);
+}
+
+.dashboard-header {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-xl);
+  margin-bottom: var(--spacing-lg);
+}
+
+.dashboard-welcome {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.dashboard-title {
+  font-size: var(--font-size-3xl);
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.dashboard-subtitle {
+  color: var(--color-gray-600);
+  font-size: var(--font-size-lg);
+  margin: var(--spacing-sm) 0 0 0;
+}
+
+.user-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+}
+
+/* ========================
+   GRILLE DE CARTES DASHBOARD
+   ======================== */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.dashboard-card {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-xl);
+  transition: var(--transition);
+}
+
+.dashboard-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.card-icon {
+  font-size: var(--font-size-2xl);
+  margin-right: var(--spacing-md);
+}
+
+.card-title {
+  font-size: var(--font-size-xl);
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.card-content {
+  color: var(--color-gray-700);
+}
+
+/* ========================
+   MÉTRIQUES ET STATISTIQUES
+   ======================== */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.stat-card {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: var(--spacing-lg);
+  text-align: center;
+  border-left: 4px solid var(--color-primary);
+}
+
+.stat-number {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-600);
+  margin: var(--spacing-xs) 0 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-trend {
+  font-size: var(--font-size-xs);
+  margin-top: var(--spacing-xs);
+}
+
+.trend-up {
+  color: var(--color-secondary);
+}
+
+.trend-down {
+  color: #ef4444;
+}
+
+.trend-stable {
+  color: var(--color-gray-500);
+}
+
+/* ========================
+   ACTIONS RAPIDES
+   ======================== */
+
+.quick-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-top: var(--spacing-lg);
+}
+
+.quick-action-btn {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+}
+
+.quick-action-btn:hover {
+  background-color: var(--color-primary-dark);
+  transform: translateY(-1px);
+}
+
+.quick-action-btn.secondary {
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+}
+
+.quick-action-btn.secondary:hover {
+  background: var(--color-gray-300);
+}
+
+.action-icon {
+  margin-right: var(--spacing-sm);
+}
+
+/* ========================
+   LISTES ET TABLEAUX
+   ======================== */
+
+.dashboard-list {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.list-header {
+  background: var(--color-gray-50);
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.list-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin: 0;
+}
+
+.list-item {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-gray-100);
+  transition: var(--transition);
+}
+
+.list-item:hover {
+  background-color: var(--color-gray-50);
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.item-primary {
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin-bottom: var(--spacing-xs);
+}
+
+.item-secondary {
+  color: var(--color-gray-600);
+  font-size: var(--font-size-sm);
+}
+
+.item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--spacing-sm);
+}
+
+/* ========================
+   RECOMMANDATIONS ET ALERTES
+   ======================== */
+
+.recommendations {
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.recommendation-item:last-child {
+  margin-bottom: 0;
+}
+
+.recommendation-icon {
+  font-size: var(--font-size-lg);
+  margin-right: var(--spacing-md);
+  margin-top: 2px;
+}
+
+.recommendation-content h4 {
+  color: var(--color-gray-900);
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-size-base);
+}
+
+.recommendation-content p {
+  color: var(--color-gray-600);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* ========================
+   BADGES ET INDICATEURS
+   ======================== */
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-success {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+/* ========================
+   ÉTATS DE CHARGEMENT
+   ======================== */
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-3xl);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--color-gray-200);
+  border-top: 4px solid var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ========================
+   RESPONSIVE DESIGN
+   ======================== */
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: var(--spacing-md);
+  }
+  
+  .dashboard-welcome {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .user-avatar {
+    margin-top: var(--spacing-md);
+    width: 60px;
+    height: 60px;
+    font-size: var(--font-size-lg);
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .quick-actions {
+    flex-direction: column;
+  }
+  
+  .quick-action-btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

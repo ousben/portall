@@ -1,0 +1,312 @@
+/* portall/client/src/components/DashboardHeader.css */
+
+/*
+ * Styles pour le header de navigation des dashboards
+ * 
+ * Ces styles créent une navigation moderne et professionnelle
+ * qui s'intègre parfaitement avec votre design system existant.
+ */
+
+/* ========================
+   HEADER PRINCIPAL
+   ======================== */
+
+.dashboard-header-nav {
+  background: white;
+  border-bottom: 1px solid var(--color-gray-200);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.header-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 70px;
+}
+
+/* ========================
+   LOGO ET TITRE
+   ======================== */
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius);
+}
+
+.header-logo:hover {
+  background-color: var(--color-gray-50);
+}
+
+.logo-icon {
+  font-size: var(--font-size-2xl);
+}
+
+.logo-text {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.header-title h1 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  color: var(--color-gray-900);
+  font-weight: 600;
+}
+
+.header-subtitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-600);
+  margin-top: 2px;
+}
+
+/* ========================
+   MENU UTILISATEUR
+   ======================== */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.user-menu-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--color-gray-900);
+  font-size: var(--font-size-sm);
+}
+
+.user-type {
+  font-size: var(--font-size-xs);
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.user-avatar-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+}
+
+.user-avatar-menu:hover {
+  background-color: var(--color-gray-50);
+}
+
+.user-avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.menu-arrow {
+  font-size: 10px;
+  color: var(--color-gray-500);
+  transition: var(--transition);
+}
+
+/* ========================
+   MENU DÉROULANT
+   ======================== */
+
+.menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--spacing-sm);
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--color-gray-200);
+  min-width: 250px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.dropdown-header {
+  padding: var(--spacing-lg);
+  background-color: var(--color-gray-50);
+  border-bottom: 1px solid var(--color-gray-200);
+}
+
+.dropdown-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.dropdown-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: var(--font-size-base);
+}
+
+.dropdown-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdown-details strong {
+  color: var(--color-gray-900);
+  font-size: var(--font-size-base);
+  margin-bottom: 2px;
+}
+
+.dropdown-details small {
+  color: var(--color-gray-600);
+  font-size: var(--font-size-xs);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: var(--color-gray-200);
+}
+
+.dropdown-actions {
+  padding: var(--spacing-sm) 0;
+}
+
+.dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-700);
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background-color: var(--color-gray-50);
+}
+
+.dropdown-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logout-item {
+  color: #dc2626;
+}
+
+.logout-item:hover {
+  background-color: #fee2e2;
+}
+
+.item-icon {
+  font-size: var(--font-size-base);
+  width: 20px;
+  text-align: center;
+}
+
+/* ========================
+   RESPONSIVE DESIGN
+   ======================== */
+
+@media (max-width: 768px) {
+  .header-container {
+    padding: 0 var(--spacing-md);
+    height: 60px;
+  }
+  
+  .header-left {
+    gap: var(--spacing-md);
+  }
+  
+  .user-info {
+    display: none; /* Masquer les infos texte sur mobile */
+  }
+  
+  .header-title h1 {
+    font-size: var(--font-size-lg);
+  }
+  
+  .header-subtitle {
+    display: none; /* Masquer le sous-titre sur mobile */
+  }
+  
+  .logo-text {
+    display: none; /* Masquer le texte du logo sur très petit écran */
+  }
+  
+  .user-dropdown {
+    min-width: 200px;
+    right: var(--spacing-md);
+  }
+}
+
+@media (max-width: 480px) {
+  .header-container {
+    padding: 0 var(--spacing-sm);
+  }
+  
+  .user-dropdown {
+    left: var(--spacing-sm);
+    right: var(--spacing-sm);
+    min-width: auto;
+  }
+}
