@@ -21,6 +21,13 @@ async function runCompleteAuthTest() {
   process.env.NODE_ENV = 'test';
   
   try {
+    // Ces variables sont déclarées ici pour être accessibles dans tous les tests
+    let playerToken = null;        // Token JWT du joueur pour les tests d'accès
+    let coachToken = null;         // Token JWT du coach pour les tests d'accès
+    let playerData = null;         // Données du joueur créé pour les tests
+    let coachData = null;          // Données du coach créé pour les tests
+    let app = null;                // Instance de l'application Express
+
     // ===========================
     // ÉTAPE 1: CONFIGURATION INTÉGRÉE DE L'ENVIRONNEMENT
     // ===========================
@@ -176,7 +183,7 @@ async function runCompleteAuthTest() {
     console.log('\n⚽ Test 3: Inscription complète d\'un joueur NJCAA...');
     
     const timestamp = Date.now();
-    const playerData = {
+    playerData = {
       firstName: 'Alex',
       lastName: 'TestPlayer',
       email: `testplayer.${timestamp}@portall-test.com`,
@@ -197,8 +204,6 @@ async function runCompleteAuthTest() {
     if (playerRegResponse.status === 201) {
       console.log('✅ Inscription joueur réussie avec validation complète');
       console.log(`   Email: ${playerData.email}`);
-      console.log(`   Conditions acceptées: ${playerData.termsAccepted}`);
-      console.log(`   Newsletter: ${playerData.newsletterOptIn ? 'Acceptée' : 'Refusée'}`);
       console.log(`   ID utilisateur: ${playerRegResponse.body.user?.id || 'N/A'}`);
     } else {
       console.log('❌ Détails de l\'erreur:', JSON.stringify(playerRegResponse.body, null, 2));
@@ -223,10 +228,6 @@ async function runCompleteAuthTest() {
         email: playerData.email,
         password: playerData.password
       });
-
-    // Log détaillé pour comprendre la structure de la réponse
-    console.log('🔍 [DEBUG] Login response status:', playerLoginResponse.status);
-    console.log('🔍 [DEBUG] Login response body structure:', Object.keys(playerLoginResponse.body));
 
     // Adaptation à la nouvelle structure de réponse de votre API sophistiquée
     if (playerLoginResponse.status === 200) {
@@ -282,10 +283,38 @@ async function runCompleteAuthTest() {
       throw new Error(`Connexion joueur échouée avec status ${playerLoginResponse.status}`);
     }
 
+    if (playerLoginResponse.status === 200) {
+      const loginData = extractLoginData(playerLoginResponse.body);
+      
+      if (loginData) {
+        console.log('✅ Connexion joueur réussie avec extraction adaptive');
+        console.log(`   Strategy used: ${loginData.strategy}`);
+        console.log(`   Token: ${loginData.token.substring(0, 25)}...`);
+        console.log(`   User: ${loginData.user.firstName} ${loginData.user.lastName}`);
+        
+        // CORRECTION: Assigner le token à la variable partagée accessible partout
+        playerToken = loginData.token;
+        
+        console.log('✅ Token joueur stocké pour les tests suivants');
+        
+      } else {
+        throw new Error('Impossible d\'extraire les données de connexion - structure de réponse inattendue');
+      }
+    } else {
+      throw new Error(`Connexion joueur échouée avec status ${playerLoginResponse.status}`);
+    }
+
     // ===========================
     // TEST 5: Accès au dashboard joueur
     // ===========================
     console.log('\n📊 Test 5: Accès au dashboard joueur...');
+
+    // Vérification de sécurité pour s'assurer que le token est disponible
+    if (!playerToken) {
+      throw new Error('Token joueur non disponible pour le test du dashboard - vérifiez le test de connexion précédent');
+    }
+    
+    console.log(`🔍 Utilisation du token pour accès dashboard: ${playerToken.substring(0, 25)}...`);
     
     const playerDashboardResponse = await request(app)
       .get('/api/players/dashboard')
@@ -298,6 +327,8 @@ async function runCompleteAuthTest() {
         console.log(`   Nom: ${profile.user?.firstName} ${profile.user?.lastName}`);
         console.log(`   Statut: ${profile.profileCompletionStatus || 'basic'}`);
         console.log(`   College: ${profile.college?.name || 'N/A'}`);
+        console.log(`   Profil visible: ${profile.isProfileVisible ? 'Oui' : 'Non'}`);
+        console.log(`   Vues du profil: ${profile.profileViews || 0}`);
       }
     } else {
       console.log('❌ Détails:', JSON.stringify(playerDashboardResponse.body, null, 2));
@@ -309,7 +340,7 @@ async function runCompleteAuthTest() {
     // ===========================
     console.log('\n🏟️ Test 6: Inscription complète d\'un coach NCAA...');
     
-    const coachData = {
+    coachData = {
       firstName: 'Sarah',
       lastName: 'TestCoach',
       email: `testcoach.${timestamp}@portall-test.com`,
