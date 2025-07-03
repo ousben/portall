@@ -19,11 +19,15 @@ async function testCompleteRegistrationFlow() {
   
   // Nous devons importer l'app après avoir configuré l'environnement de test
   process.env.NODE_ENV = 'test';
-  
-  // Importation dynamique pour éviter les conflits de configuration
-  const app = require('./server');
-  
+
   try {
+
+    // Importation dynamique pour éviter les conflits de configuration
+    const app = require('./server');
+
+    // Attendre un court instant pour que les connexions se stabilisent
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  
     // ===========================
     // TEST 1: Inscription d'un joueur NJCAA
     // ===========================

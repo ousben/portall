@@ -252,11 +252,19 @@ const startServer = async () => {
       console.log(`🏟️ Coach dashboard endpoints available at http://localhost:${PORT}/api/coaches`);
       console.log(`✅ Phase 3 User Management Dashboard Routes - COMPLETE`);
     });
+
+    //return server;
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
   }
 };
 
-// Démarrer l'application
-startServer();
+// NOUVEAU : Export de l'application pour les tests
+module.exports = app;
+
+// Démarrer le serveur seulement si ce fichier est exécuté directement
+// (pas quand il est importé par les tests)
+if (require.main === module) {
+  startServer();
+}
