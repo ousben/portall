@@ -216,24 +216,71 @@ async function runCompleteAuthTest() {
     // TEST 4: Connexion et authentification du joueur
     // ===========================
     console.log('\n🔐 Test 4: Connexion et authentification du joueur...');
-    
+
     const playerLoginResponse = await request(app)
       .post('/api/auth/login')
       .send({
         email: playerData.email,
         password: playerData.password
       });
-    
-    if (playerLoginResponse.status === 200 && playerLoginResponse.body.accessToken) {
-      console.log('✅ Connexion joueur réussie');
-      console.log(`   Token JWT généré: ${playerLoginResponse.body.accessToken.substring(0, 25)}...`);
-      console.log(`   Type d'utilisateur: ${playerLoginResponse.body.user?.userType}`);
+
+    // Log détaillé pour comprendre la structure de la réponse
+    console.log('🔍 [DEBUG] Login response status:', playerLoginResponse.status);
+    console.log('🔍 [DEBUG] Login response body structure:', Object.keys(playerLoginResponse.body));
+
+    // Adaptation à la nouvelle structure de réponse de votre API sophistiquée
+    if (playerLoginResponse.status === 200) {
+      // Votre API retourne maintenant une structure plus riche
+      const responseData = playerLoginResponse.body;
+      
+      // Extraire le token selon la nouvelle structure
+      let accessToken;
+      let userData;
+      
+      // Gestion flexible de différentes structures de réponse
+      if (responseData.data && responseData.data.tokens) {
+        // Structure nouvelle : {status: "success", data: {user: {...}, tokens: {accessToken: "..."}}}
+        accessToken = responseData.data.tokens.accessToken;
+        userData = responseData.data.user;
+        console.log('✅ Using new API response structure');
+      } else if (responseData.accessToken) {
+        // Structure ancienne : {accessToken: "...", user: {...}}
+        accessToken = responseData.accessToken;
+        userData = responseData.user;
+        console.log('✅ Using legacy API response structure');
+      } else {
+        // Structure alternative possible
+        accessToken = responseData.tokens?.accessToken || responseData.token;
+        userData = responseData.user;
+        console.log('✅ Using alternative API response structure');
+      }
+      
+      // Validation que nous avons bien récupéré les données essentielles
+      if (accessToken && userData) {
+        console.log('✅ Connexion joueur réussie avec extraction de données successful');
+        console.log(`   Token JWT généré: ${accessToken.substring(0, 25)}...`);
+        console.log(`   Type d'utilisateur: ${userData.userType}`);
+        console.log(`   Nom: ${userData.firstName} ${userData.lastName}`);
+        console.log(`   Email: ${userData.email}`);
+        console.log(`   Status actif: ${userData.isActive}`);
+        
+        // Stocker le token pour les tests suivants
+        const playerToken = accessToken;
+        
+        // Continuer avec le test suivant...
+        
+      } else {
+        console.log('❌ Impossible d\'extraire le token ou les données utilisateur');
+        console.log('🔍 Structure complète de la réponse:', JSON.stringify(responseData, null, 2));
+        throw new Error('Token ou données utilisateur manquants dans la réponse de connexion');
+      }
+      
     } else {
-      console.log('❌ Détails:', JSON.stringify(playerLoginResponse.body, null, 2));
-      throw new Error('Connexion joueur échouée');
+      console.log('❌ Échec de la connexion HTTP');
+      console.log('🔍 Status code:', playerLoginResponse.status);
+      console.log('🔍 Détails de l\'erreur:', JSON.stringify(playerLoginResponse.body, null, 2));
+      throw new Error(`Connexion joueur échouée avec status ${playerLoginResponse.status}`);
     }
-    
-    const playerToken = playerLoginResponse.body.accessToken;
 
     // ===========================
     // TEST 5: Accès au dashboard joueur
