@@ -276,25 +276,16 @@ class AuthController {
    * Validation des données de profil avec gestion intelligente des données enrichies
    */
   static async validateProfileData(userType, profileData) {
-    console.log('🔍 [DEBUG] Starting validateProfileData');
-    console.log('🔍 [DEBUG] userType:', userType);
-    console.log('🔍 [DEBUG] profileData:', JSON.stringify(profileData, null, 2));
     
     const errors = [];
 
     try {
       // Import des modèles au moment de l'exécution
-      console.log('🔍 [DEBUG] Importing models...');
       const models = require('../models');
-      console.log('✅ [DEBUG] Models imported successfully');
 
       if (userType === 'player') {
-        console.log('🔍 [DEBUG] Validating player profile...');
         
         const { gender, collegeId } = profileData;
-        
-        console.log('🔍 [DEBUG] Raw collegeId:', collegeId);
-        console.log('🔍 [DEBUG] collegeId type:', typeof collegeId);
 
         // Validation basique du genre
         if (!gender || !['male', 'female'].includes(gender)) {
@@ -317,14 +308,9 @@ class AuthController {
           // Cas où les données sont enrichies par la validation Joi externe
           actualCollegeId = collegeId.collegeId;
           collegeData = collegeId.collegeData;
-          console.log('✅ [DEBUG] Extracted enriched college data:', {
-            id: actualCollegeId,
-            hasData: !!collegeData
-          });
         } else if (typeof collegeId === 'number' || typeof collegeId === 'string') {
           // Cas où nous avons un ID simple
           actualCollegeId = parseInt(collegeId, 10);
-          console.log('✅ [DEBUG] Using simple college ID:', actualCollegeId);
         } else {
           errors.push({
             field: 'collegeId',
@@ -342,7 +328,6 @@ class AuthController {
           } else {
             // Si nous avons déjà les données du college (validation Joi externe), les utiliser
             if (collegeData) {
-              console.log('✅ [DEBUG] Using pre-validated college data');
               if (!collegeData.isActive) {
                 errors.push({
                   field: 'collegeId',
@@ -352,7 +337,6 @@ class AuthController {
             } else {
               // Sinon, faire la validation de base de données
               try {
-                console.log('🔍 [DEBUG] Querying database for college ID:', actualCollegeId);
                 const college = await models.NJCAACollege.findByPk(actualCollegeId);
                 
                 if (!college) {
@@ -367,7 +351,6 @@ class AuthController {
                   });
                 }
               } catch (dbError) {
-                console.error('❌ [DEBUG] Database error:', dbError);
                 errors.push({
                   field: 'collegeId',
                   message: 'Error validating college selection'
@@ -378,7 +361,6 @@ class AuthController {
         }
 
       } else if (userType === 'coach') {
-        console.log('🔍 [DEBUG] Validating coach profile...');
         
         const { position, phoneNumber, collegeId, division, teamSport } = profileData;
 
@@ -432,9 +414,6 @@ class AuthController {
         }
         // Pour simplifier, on ne fait pas la validation croisée division/college pour l'instant
       }
-
-      console.log('✅ [DEBUG] Validation completed');
-      console.log('🔍 [DEBUG] Errors found:', errors.length);
       
       const result = {
         isValid: errors.length === 0,
@@ -444,8 +423,6 @@ class AuthController {
       return result;
 
     } catch (error) {
-      console.error('❌ [DEBUG] Exception in validateProfileData:', error);
-      
       return {
         isValid: false,
         errors: [{
@@ -468,10 +445,26 @@ class AuthController {
 
     const { gender, collegeId } = profileData;
 
+    // SOLUTION : Extraction intelligente de l'ID numérique du college
+    let actualCollegeId;
+
+    if (typeof collegeId === 'object' && collegeId.collegeId) {
+      // Cas où les données sont enrichies par la validation Joi externe
+      actualCollegeId = collegeId.collegeId;
+      console.log('✅ [createPlayerProfile] Using enriched college ID:', actualCollegeId);
+    } else if (typeof collegeId === 'number' || typeof collegeId === 'string') {
+      // Cas où nous avons un ID simple
+      actualCollegeId = parseInt(collegeId, 10);
+      console.log('✅ [createPlayerProfile] Using simple college ID:', actualCollegeId);
+    } else {
+      console.error('❌ [createPlayerProfile] Invalid college ID format:', collegeId);
+      throw new Error('Invalid college ID format for player profile creation');
+    }
+
     const playerProfile = await PlayerProfile.create({
       userId: userId,
       gender: gender,
-      collegeId: collegeId,
+      collegeId: actualCollegeId,
       profileCompletionStatus: 'basic', // Le joueur devra compléter plus tard
       isProfileVisible: false, // Invisible jusqu'à validation admin
       profileViews: 0,
@@ -494,11 +487,27 @@ class AuthController {
 
     const { position, phoneNumber, collegeId, division, teamSport } = profileData;
 
+    // SOLUTION : Extraction intelligente de l'ID numérique du college NCAA
+    let actualCollegeId;
+
+    if (typeof collegeId === 'object' && collegeId.collegeId) {
+      // Cas où les données sont enrichies par la validation Joi externe
+      actualCollegeId = collegeId.collegeId;
+      console.log('✅ [createCoachProfile] Using enriched college ID:', actualCollegeId);
+    } else if (typeof collegeId === 'number' || typeof collegeId === 'string') {
+      // Cas où nous avons un ID simple
+      actualCollegeId = parseInt(collegeId, 10);
+      console.log('✅ [createCoachProfile] Using simple college ID:', actualCollegeId);
+    } else {
+      console.error('❌ [createCoachProfile] Invalid college ID format:', collegeId);
+      throw new Error('Invalid college ID format for coach profile creation');
+    }
+
     const coachProfile = await CoachProfile.create({
       userId: userId,
       position: position,
       phoneNumber: phoneNumber,
-      collegeId: collegeId,
+      collegeId: actualCollegeId,
       division: division,
       teamSport: teamSport,
       savedSearches: [], // Initialisé vide, sera rempli par l'usage

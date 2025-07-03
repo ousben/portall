@@ -97,6 +97,44 @@ async function runCompleteAuthTest() {
     console.log('✅ Application prête pour les tests');
 
     // ===========================
+    // FONCTION UTILITAIRE POUR L'ACTIVATION DES COMPTES DE TEST
+    // ===========================
+    
+    /**
+     * Active un compte utilisateur pour les tests
+     * 
+     * Cette fonction simule l'approbation administrative qui se ferait
+     * normalement manuellement en production. Elle respecte l'architecture
+     * de sécurité tout en permettant aux tests automatisés de s'exécuter.
+     * 
+     * @param {string} email - Email de l'utilisateur à activer
+     * @param {string} userType - Type d'utilisateur pour les logs
+     * @returns {Object} L'utilisateur activé
+     */
+    async function activateTestAccount(email, userType) {
+      console.log(`👨‍💼 Activation du compte ${userType} pour les tests...`);
+      
+      // Utilise la variable models déjà déclarée en haut du fichier
+      const user = await models.User.findOne({ where: { email } });
+      
+      if (!user) {
+        throw new Error(`Utilisateur ${email} non trouvé pour activation`);
+      }
+      
+      // Simulation de l'approbation administrative
+      await user.update({
+        isActive: true,
+        isEmailVerified: true
+      });
+      
+      console.log(`✅ Compte ${userType} activé avec succès`);
+      console.log(`   Email: ${email}`);
+      console.log(`   Status: Actif et vérifié`);
+      
+      return user;
+    }
+
+    // ===========================
     // TEST 1: Vérification de la santé de l'API
     // ===========================
     console.log('\n🏥 Test 1: Vérification de la santé du serveur...');
@@ -166,6 +204,13 @@ async function runCompleteAuthTest() {
       console.log('❌ Détails de l\'erreur:', JSON.stringify(playerRegResponse.body, null, 2));
       throw new Error(`Inscription joueur échouée: ${playerRegResponse.status}`);
     }
+
+    // ===========================
+    // TEST 3B: Simulation de l'approbation admin pour les tests
+    // ===========================
+    console.log('\n👨‍💼 Test 3B: Activation administrative simulée...');
+    
+    await activateTestAccount(playerData.email, 'joueur');
 
     // ===========================
     // TEST 4: Connexion et authentification du joueur
