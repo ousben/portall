@@ -26,7 +26,19 @@ async function testCompleteRegistrationFlow() {
     const app = require('./server');
 
     // Attendre un court instant pour que les connexions se stabilisent
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Vérifier que l'environnement de test est correctement configuré
+    const dbTestResponse = await request(app).get('/api/db-test');
+    if (dbTestResponse.status === 200) {
+      console.log('✅ Environnement de test vérifié');
+      console.log(`   Colleges NJCAA: ${dbTestResponse.body.statistics.njcaaColleges}`);
+      console.log(`   Colleges NCAA: ${dbTestResponse.body.statistics.ncaaColleges}`);
+    } else {
+      throw new Error('Environnement de test non configuré correctement');
+    }
+
+    console.log('\n🏥 Test 1: Vérification de la santé du serveur...');
   
     // ===========================
     // TEST 1: Inscription d'un joueur NJCAA
@@ -38,51 +50,63 @@ async function testCompleteRegistrationFlow() {
       lastName: 'TestPlayer',
       email: `testplayer.${Date.now()}@example.com`, // Email unique pour éviter les conflits
       password: 'SecurePass123!',
+      confirmPassword: 'SecurePass123!', // NOUVEAU : Confirmation du mot de passe
       userType: 'player',
       gender: 'male',
-      collegeId: 1 // Nous supposerons qu'un college NJCAA existe avec l'ID 1
+      collegeId: 1, // Nous supposerons qu'un college NJCAA existe avec l'ID 1
+      termsAccepted: true, // NOUVEAU : Acceptation des conditions
+      newsletterOptIn: false, // NOUVEAU : Opt-in newsletter (peut être false)
+      referralSource: 'web_search' // OPTIONNEL : Source de découverte
     };
     
-    const playerResponse = await request(app)
+    const playerRegResponse = await request(app)
       .post('/api/auth/register')
       .send(playerData);
     
-    if (playerResponse.status === 201) {
-      console.log('✅ Inscription joueur réussie');
-      console.log(`   User ID: ${playerResponse.body.user?.id}`);
+    if (playerRegResponse.status === 201) {
+      console.log('✅ Inscription joueur réussie avec validation complète');
+      console.log(`   Email: ${playerData.email}`);
+      console.log(`   Conditions acceptées: ${playerData.termsAccepted}`);
+      console.log(`   Newsletter: ${playerData.newsletterOptIn ? 'Acceptée' : 'Refusée'}`);
     } else {
-      console.log('❌ Échec inscription joueur:', playerResponse.body);
-      throw new Error('Player registration failed');
+      console.log('❌ Détails de l\'erreur:', JSON.stringify(playerRegResponse.body, null, 2));
+      throw new Error(`Inscription joueur échouée: ${playerRegResponse.status}`);
     }
 
     // ===========================
     // TEST 2: Inscription d'un coach NCAA
     // ===========================
-    console.log('\n🏟️ Test 2: Inscription d\'un coach...');
+    console.log('\n🏟️ Test 2: Inscription d\'un coach NCAA...');
     
     const coachData = {
       firstName: 'Sarah',
       lastName: 'TestCoach',
-      email: `testcoach.${Date.now()}@example.com`,
+      email: `testcoach.${timestamp}@portall-test.com`,
       password: 'SecurePass123!',
+      confirmPassword: 'SecurePass123!', // NOUVEAU : Confirmation du mot de passe
       userType: 'coach',
       position: 'head_coach',
       phoneNumber: '+1234567890',
-      collegeId: 1, // ID d'un college NCAA/NAIA
+      collegeId: 1,
       division: 'ncaa_d1',
-      teamSport: 'mens_soccer'
+      teamSport: 'mens_soccer',
+      termsAccepted: true, // NOUVEAU : Acceptation des conditions
+      newsletterOptIn: true, // NOUVEAU : Les coachs peuvent vouloir les news
+      referralSource: 'coach_recommendation' // OPTIONNEL : Source spécifique aux coachs
     };
     
-    const coachResponse = await request(app)
+    const coachRegResponse = await request(app)
       .post('/api/auth/register')
       .send(coachData);
     
-    if (coachResponse.status === 201) {
-      console.log('✅ Inscription coach réussie');
-      console.log(`   User ID: ${coachResponse.body.user?.id}`);
+    if (coachRegResponse.status === 201) {
+      console.log('✅ Inscription coach réussie avec validation métier complète');
+      console.log(`   Email: ${coachData.email}`);
+      console.log(`   Position: ${coachData.position}`);
+      console.log(`   Division: ${coachData.division}`);
     } else {
-      console.log('❌ Échec inscription coach:', coachResponse.body);
-      throw new Error('Coach registration failed');
+      console.log('❌ Détails:', JSON.stringify(coachRegResponse.body, null, 2));
+      throw new Error('Inscription coach échouée');
     }
 
     // ===========================
