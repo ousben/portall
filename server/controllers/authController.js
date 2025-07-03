@@ -275,11 +275,15 @@ class AuthController {
     const errors = [];
 
     try {
+      // CORRECTION : Import des modèles au moment de l'exécution pour éviter les problèmes de timing
+      const models = require('../models');
+      const { NJCAACollege, NCAACollege } = models;
+
       if (userType === 'player') {
         // ========================
         // VALIDATION POUR LES JOUEURS NJCAA
         // ========================
-        
+      
         const { gender, collegeId } = profileData;
 
         // Vérification du genre (requis pour les équipes genrées)
@@ -311,7 +315,7 @@ class AuthController {
         // ========================
         // VALIDATION POUR LES COACHS NCAA/NAIA
         // ========================
-        
+      
         const { position, phoneNumber, collegeId, division, teamSport } = profileData;
 
         // Vérification de la position de coaching
@@ -380,7 +384,7 @@ class AuthController {
         isValid: false,
         errors: [{
           field: 'general',
-          message: 'Validation process failed'
+          message: 'Validation process failed. Please try again.'
         }]
       };
     }
@@ -393,6 +397,9 @@ class AuthController {
    * sensées qui correspondent à votre logique métier.
    */
   static async createPlayerProfile(userId, profileData, transaction) {
+    // Import des modèles au moment de l'exécution
+    const { PlayerProfile } = require('../models');
+
     const { gender, collegeId } = profileData;
 
     const playerProfile = await PlayerProfile.create({
@@ -416,6 +423,9 @@ class AuthController {
    * professionnelles fournies lors de l'inscription.
    */
   static async createCoachProfile(userId, profileData, transaction) {
+    // Import des modèles au moment de l'exécution
+    const { CoachProfile } = require('../models');
+
     const { position, phoneNumber, collegeId, division, teamSport } = profileData;
 
     const coachProfile = await CoachProfile.create({
