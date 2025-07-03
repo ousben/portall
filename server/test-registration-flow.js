@@ -97,7 +97,7 @@ async function runCompleteAuthTest() {
     console.log('\n🚀 Initialisation de l\'application Express...');
     
     // Import de l'application Express (maintenant que la DB est prête)
-    const app = require('./server');
+    app = require('./server');
     
     // Pause pour stabiliser les connexions
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -139,6 +139,67 @@ async function runCompleteAuthTest() {
       console.log(`   Status: Actif et vérifié`);
       
       return user;
+    }
+
+    // ===========================
+    // FONCTION UTILITAIRE D'EXTRACTION ADAPTATIVE DES DONNÉES DE CONNEXION
+    // ===========================
+    
+    /**
+     * Extrait de manière intelligente le token et les données utilisateur 
+     * de la réponse d'authentification, quelle que soit la structure de l'API
+     * 
+     * Cette fonction est comme un traducteur universel qui comprend
+     * différents "dialectes" de réponses API et extrait toujours les bonnes informations
+     */
+    function extractLoginData(responseBody) {
+      console.log('🔍 Analyse adaptative de la structure de réponse...');
+      
+      let accessToken = null;
+      let user = null;
+      let strategy = 'unknown';
+
+      // Stratégie 1: Structure moderne avec data wrapper
+      if (responseBody.data && responseBody.data.tokens && responseBody.data.tokens.accessToken) {
+        accessToken = responseBody.data.tokens.accessToken;
+        user = responseBody.data.user;
+        strategy = 'modern_nested';
+        console.log('✅ Utilisation de la structure moderne (data.tokens.accessToken)');
+      }
+      // Stratégie 2: Structure classique simple
+      else if (responseBody.accessToken) {
+        accessToken = responseBody.accessToken;
+        user = responseBody.user;
+        strategy = 'classic_flat';
+        console.log('✅ Utilisation de la structure classique (accessToken)');
+      }
+      // Stratégie 3: Structure avec token direct
+      else if (responseBody.token) {
+        accessToken = responseBody.token;
+        user = responseBody.user;
+        strategy = 'direct_token';
+        console.log('✅ Utilisation de la structure avec token direct');
+      }
+      // Stratégie 4: Structure avec tokens wrapper
+      else if (responseBody.tokens && responseBody.tokens.accessToken) {
+        accessToken = responseBody.tokens.accessToken;
+        user = responseBody.user;
+        strategy = 'tokens_wrapper';
+        console.log('✅ Utilisation de la structure avec tokens wrapper');
+      }
+
+      // Validation finale des données extraites
+      if (accessToken && user) {
+        return {
+          token: accessToken,
+          user: user,
+          strategy: strategy
+        };
+      } else {
+        console.log('❌ Impossible d\'extraire les données requises');
+        console.log('🔍 Structure complète reçue:', JSON.stringify(responseBody, null, 2));
+        return null;
+      }
     }
 
     // ===========================
@@ -218,7 +279,7 @@ async function runCompleteAuthTest() {
     await activateTestAccount(playerData.email, 'joueur');
 
     // ===========================
-    // TEST 4: Connexion et authentification du joueur
+    // TEST 4: CONNEXION ET AUTHENTIFICATION DU JOUEUR (VERSION CORRIGÉE)
     // ===========================
     console.log('\n🔐 Test 4: Connexion et authentification du joueur...');
 
@@ -229,78 +290,35 @@ async function runCompleteAuthTest() {
         password: playerData.password
       });
 
-    // Adaptation à la nouvelle structure de réponse de votre API sophistiquée
+    // Vérification du status HTTP d'abord
     if (playerLoginResponse.status === 200) {
-      // Votre API retourne maintenant une structure plus riche
-      const responseData = playerLoginResponse.body;
+      console.log('✅ Requête de connexion réussie (HTTP 200)');
       
-      // Extraire le token selon la nouvelle structure
-      let accessToken;
-      let userData;
-      
-      // Gestion flexible de différentes structures de réponse
-      if (responseData.data && responseData.data.tokens) {
-        // Structure nouvelle : {status: "success", data: {user: {...}, tokens: {accessToken: "..."}}}
-        accessToken = responseData.data.tokens.accessToken;
-        userData = responseData.data.user;
-        console.log('✅ Using new API response structure');
-      } else if (responseData.accessToken) {
-        // Structure ancienne : {accessToken: "...", user: {...}}
-        accessToken = responseData.accessToken;
-        userData = responseData.user;
-        console.log('✅ Using legacy API response structure');
-      } else {
-        // Structure alternative possible
-        accessToken = responseData.tokens?.accessToken || responseData.token;
-        userData = responseData.user;
-        console.log('✅ Using alternative API response structure');
-      }
-      
-      // Validation que nous avons bien récupéré les données essentielles
-      if (accessToken && userData) {
-        console.log('✅ Connexion joueur réussie avec extraction de données successful');
-        console.log(`   Token JWT généré: ${accessToken.substring(0, 25)}...`);
-        console.log(`   Type d'utilisateur: ${userData.userType}`);
-        console.log(`   Nom: ${userData.firstName} ${userData.lastName}`);
-        console.log(`   Email: ${userData.email}`);
-        console.log(`   Status actif: ${userData.isActive}`);
-        
-        // Stocker le token pour les tests suivants
-        const playerToken = accessToken;
-        
-        // Continuer avec le test suivant...
-        
-      } else {
-        console.log('❌ Impossible d\'extraire le token ou les données utilisateur');
-        console.log('🔍 Structure complète de la réponse:', JSON.stringify(responseData, null, 2));
-        throw new Error('Token ou données utilisateur manquants dans la réponse de connexion');
-      }
-      
-    } else {
-      console.log('❌ Échec de la connexion HTTP');
-      console.log('🔍 Status code:', playerLoginResponse.status);
-      console.log('🔍 Détails de l\'erreur:', JSON.stringify(playerLoginResponse.body, null, 2));
-      throw new Error(`Connexion joueur échouée avec status ${playerLoginResponse.status}`);
-    }
-
-    if (playerLoginResponse.status === 200) {
+      // Utilisation de notre fonction d'extraction adaptative
       const loginData = extractLoginData(playerLoginResponse.body);
       
       if (loginData) {
-        console.log('✅ Connexion joueur réussie avec extraction adaptive');
-        console.log(`   Strategy used: ${loginData.strategy}`);
+        console.log('✅ Connexion joueur réussie avec extraction adaptative');
+        console.log(`   Stratégie utilisée: ${loginData.strategy}`);
         console.log(`   Token: ${loginData.token.substring(0, 25)}...`);
-        console.log(`   User: ${loginData.user.firstName} ${loginData.user.lastName}`);
+        console.log(`   Utilisateur: ${loginData.user.firstName} ${loginData.user.lastName}`);
+        console.log(`   Type: ${loginData.user.userType}`);
         
-        // CORRECTION: Assigner le token à la variable partagée accessible partout
+        // CORRECTION CRITIQUE: Assignment du token à la variable partagée
         playerToken = loginData.token;
         
         console.log('✅ Token joueur stocké pour les tests suivants');
         
       } else {
-        throw new Error('Impossible d\'extraire les données de connexion - structure de réponse inattendue');
+        console.log('❌ Impossible d\'extraire le token de la réponse');
+        console.log('🔍 Structure complète de la réponse:');
+        console.log(JSON.stringify(playerLoginResponse.body, null, 2));
+        throw new Error('Token ou données utilisateur manquants dans la réponse de connexion');
       }
     } else {
+      console.log('❌ Échec de la requête de connexion');
+      console.log('🔍 Status code:', playerLoginResponse.status);
+      console.log('🔍 Détails de l\'erreur:', JSON.stringify(playerLoginResponse.body, null, 2));
       throw new Error(`Connexion joueur échouée avec status ${playerLoginResponse.status}`);
     }
 
@@ -373,6 +391,13 @@ async function runCompleteAuthTest() {
     }
 
     // ===========================
+    // TEST 6B: Activation du coach pour les tests
+    // ===========================
+    console.log('\n👨‍💼 Test 6B: Activation administrative du coach...');
+    
+    await activateTestAccount(coachData.email, 'coach');
+
+    // ===========================
     // TEST 7: Connexion et dashboard coach
     // ===========================
     console.log('\n🔐 Test 7: Connexion et accès dashboard coach...');
@@ -384,25 +409,33 @@ async function runCompleteAuthTest() {
         password: coachData.password
       });
     
-    if (coachLoginResponse.status === 200 && coachLoginResponse.body.accessToken) {
-      console.log('✅ Connexion coach réussie');
+    if (coachLoginResponse.status === 200) {
+      console.log('✅ Connexion coach HTTP réussie');
       
-      const coachToken = coachLoginResponse.body.accessToken;
+      // Utilisation de la même fonction d'extraction pour le coach
+      const coachLoginData = extractLoginData(coachLoginResponse.body);
       
-      // Test accès dashboard coach
-      const coachDashboardResponse = await request(app)
-        .get('/api/coaches/dashboard')
-        .set('Authorization', `Bearer ${coachToken}`);
-      
-      if (coachDashboardResponse.status === 200) {
-        console.log('✅ Dashboard coach accessible');
-        console.log(`   Rôle confirmé: ${coachLoginResponse.body.user?.userType}`);
+      if (coachLoginData) {
+        console.log('✅ Données coach extraites avec succès');
+        coachToken = coachLoginData.token;
+        
+        // Test accès dashboard coach
+        const coachDashboardResponse = await request(app)
+          .get('/api/coaches/dashboard')
+          .set('Authorization', `Bearer ${coachToken}`);
+        
+        if (coachDashboardResponse.status === 200) {
+          console.log('✅ Dashboard coach accessible');
+          console.log(`   Rôle confirmé: ${coachLoginData.user?.userType}`);
+        } else {
+          console.log('⚠️ Dashboard coach non accessible:', coachDashboardResponse.status);
+          throw new Error('Accès dashboard coach échoué');
+        }
       } else {
-        console.log('⚠️ Dashboard coach non accessible:', coachDashboardResponse.status);
-        throw new Error('Accès dashboard coach échoué');
+        throw new Error('Impossible d\'extraire les données de connexion coach');
       }
     } else {
-      throw new Error('Connexion coach échouée');
+      throw new Error(`Connexion coach échouée avec status ${coachLoginResponse.status}`);
     }
 
     // ===========================
@@ -429,13 +462,13 @@ async function runCompleteAuthTest() {
     console.log('✅ Configuration automatique de l\'environnement de test');
     console.log('✅ Inscription joueur avec validation multicouche');
     console.log('✅ Inscription coach avec données métier complexes');
-    console.log('✅ Authentification JWT robuste et sécurisée');
+    console.log('✅ Authentification JWT robuste et adaptative');
     console.log('✅ Dashboards fonctionnels selon les rôles utilisateur');
     console.log('✅ Contrôles d\'autorisation efficaces');
-    console.log('✅ Système de validation sophistiqué (confirmPassword, termsAccepted, etc.)');
+    console.log('✅ Système de validation sophistiqué');
     console.log('✅ Architecture de base de données relationnelle opérationnelle');
     console.log('\n🚀 Votre système Portall Phase 3 est de niveau professionnel !');
-    console.log('🎯 Vous êtes maintenant prêt pour la Phase 4 (Intégration Stripe) !');
+    console.log('🎯 Vous êtes maintenant prêt pour la Phase 4 !');
     
     // Fermeture propre de la connexion de base de données
     await sequelize.close();
@@ -473,4 +506,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = runCompleteAuthTest;
+module.exports = { runCompleteAuthTest };

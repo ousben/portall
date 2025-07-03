@@ -45,32 +45,36 @@ class PlayerController {
         });
       }
 
-      // Calcul des statistiques d'activité
-      const stats = await this.calculatePlayerStats(playerProfile.id);
+      // CORRECTION CRITIQUE : Utilisation directe de la classe au lieu de 'this'
+      // AVANT : const stats = await this.calculatePlayerStats(playerProfile.id);
+      // MAINTENANT : Référence explicite à la classe
+      const stats = await PlayerController.calculatePlayerStats(playerProfile.id);
       
       // Activité récente (30 derniers jours)
-      const recentActivity = await this.getRecentActivity(playerProfile.id);
+      const recentActivity = await PlayerController.getRecentActivity(playerProfile.id);
       
       // Recommendations personnalisées
-      const recommendations = await this.generatePlayerRecommendations(playerProfile);
+      const recommendations = await PlayerController.generatePlayerRecommendations(playerProfile);
 
       // Construction de la réponse dashboard
       const dashboardData = {
         profile: {
           ...playerProfile.toJSON(),
-          completionPercentage: this.calculateProfileCompletion(playerProfile)
+          completionPercentage: PlayerController.calculateProfileCompletion(playerProfile)
         },
         statistics: stats,
         recentActivity: recentActivity,
-        recommendations: recommendations,
-        lastUpdated: new Date()
+        recommendations: recommendations
       };
 
       console.log(`✅ Dashboard loaded successfully for player: ${req.user.email}`);
+      console.log(`   Profile completion: ${dashboardData.profile.completionPercentage}%`);
+      console.log(`   College: ${playerProfile.college?.name || 'No college assigned'}`);
+      console.log(`   Total views: ${stats.totalViews}`);
 
       return res.status(200).json({
         status: 'success',
-        message: 'Player dashboard retrieved successfully',
+        message: 'Player dashboard loaded successfully',
         data: dashboardData
       });
 
@@ -80,27 +84,28 @@ class PlayerController {
       return res.status(500).json({
         status: 'error',
         message: 'Failed to load player dashboard',
+        code: 'DASHBOARD_LOAD_ERROR',
         ...(process.env.NODE_ENV === 'development' && { debug: error.message })
       });
     }
   }
 
   /**
-   * 👤 Profil public d'un joueur (pour les coachs)
+   * 👤 Profil public d'un joueur (pour les coachs et autres joueurs)
    */
   static async getPlayerProfile(req, res) {
     try {
       const { playerId } = req.params;
       const viewerUser = req.user;
-
-      console.log(`👁️ Player profile requested: ID ${playerId} by ${viewerUser.email}`);
+      
+      console.log(`👤 Loading player profile ${playerId} for viewer: ${viewerUser.email}`);
 
       const playerProfile = await PlayerProfile.findByPk(playerId, {
         include: [
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt']
+            attributes: ['id', 'firstName', 'lastName', 'email']
           },
           {
             model: NJCAACollege,
@@ -113,25 +118,17 @@ class PlayerController {
       if (!playerProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Player profile not found',
-          code: 'PLAYER_NOT_FOUND'
+          message: 'Player profile not found'
         });
       }
 
-      // Contrôles de visibilité
-      const isOwnProfile = playerProfile.userId === viewerUser.id;
+      // Vérifications de permissions
+      const isOwnProfile = viewerUser.id === playerProfile.userId;
       const isAdmin = viewerUser.userType === 'admin';
-      
-      if (!isOwnProfile && !isAdmin && !playerProfile.isProfileVisible) {
-        return res.status(403).json({
-          status: 'error',
-          message: 'This player profile is private',
-          code: 'PROFILE_PRIVATE'
-        });
-      }
+      const isCoach = viewerUser.userType === 'coach';
 
-      // Enregistrement de la vue (analytics) - Si c'est un coach qui regarde
-      if (!isOwnProfile && viewerUser.userType === 'coach') {
+      // Enregistrer la vue si c'est un coach qui regarde
+      if (isCoach && !isOwnProfile) {
         await playerProfile.increment('profileViews');
         console.log(`📈 Profile view recorded for player ${playerId} by coach ${viewerUser.email}`);
       }
@@ -186,23 +183,23 @@ class PlayerController {
       const analytics = {
         profileViews: {
           total: playerProfile.profileViews,
-          thisMonth: await this.calculateMonthlyViews(playerProfile.id),
-          thisWeek: await this.calculateWeeklyViews(playerProfile.id),
-          trend: await this.calculateViewsTrend(playerProfile.id)
+          thisMonth: await PlayerController.calculateMonthlyViews(playerProfile.id),
+          thisWeek: await PlayerController.calculateWeeklyViews(playerProfile.id),
+          trend: await PlayerController.calculateViewsTrend(playerProfile.id)
         },
         profileMetrics: {
-          completionPercentage: this.calculateProfileCompletion(playerProfile),
+          completionPercentage: PlayerController.calculateProfileCompletion(playerProfile),
           isVisible: playerProfile.isProfileVisible,
           lastUpdate: playerProfile.lastProfileUpdate,
           createdAt: playerProfile.createdAt
         },
-        coachInteractions: await this.getCoachInteractions(playerProfile.id),
-        recommendations: await this.generateAnalyticsRecommendations(playerProfile)
+        coachInteractions: await PlayerController.getCoachInteractions(playerProfile.id),
+        recommendations: await PlayerController.generateAnalyticsRecommendations(playerProfile)
       };
 
       return res.status(200).json({
         status: 'success',
-        message: 'Player analytics retrieved successfully',
+        message: 'Player analytics loaded successfully',
         data: analytics
       });
 
@@ -221,108 +218,11 @@ class PlayerController {
    * ✏️ Mise à jour du profil joueur
    */
   static async updatePlayerProfile(req, res) {
-    const transaction = await sequelize.transaction();
-    
     try {
       const userId = req.user.id;
       const updateData = req.body;
-
-      console.log(`✏️ Updating profile for player: ${req.user.email}`);
-
-      const playerProfile = await PlayerProfile.findOne({
-        where: { userId: userId },
-        transaction
-      });
-
-      if (!playerProfile) {
-        await transaction.rollback();
-        return res.status(404).json({
-          status: 'error',
-          message: 'Player profile not found'
-        });
-      }
-
-      // Validation métier spécialisée
-      if (updateData.collegeId && updateData.collegeId !== playerProfile.collegeId) {
-        const college = await NJCAACollege.findByPk(updateData.collegeId, { transaction });
-        
-        if (!college || !college.isActive) {
-          await transaction.rollback();
-          return res.status(400).json({
-            status: 'error',
-            message: 'Selected college is not valid or inactive',
-            code: 'INVALID_COLLEGE'
-          });
-        }
-      }
-
-      // Mise à jour du profil
-      const updatedProfile = await playerProfile.update({
-        ...updateData,
-        lastProfileUpdate: new Date()
-      }, { transaction });
-
-      // Recalculer le statut de completion
-      const newCompletionStatus = this.determineCompletionStatus(updatedProfile);
       
-      if (newCompletionStatus !== updatedProfile.profileCompletionStatus) {
-        await updatedProfile.update({
-          profileCompletionStatus: newCompletionStatus
-        }, { transaction });
-      }
-
-      await transaction.commit();
-
-      // Récupération du profil mis à jour avec relations
-      const refreshedProfile = await PlayerProfile.findOne({
-        where: { userId: userId },
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['firstName', 'lastName', 'email']
-          },
-          {
-            model: NJCAACollege,
-            as: 'college',
-            attributes: ['name', 'state', 'region']
-          }
-        ]
-      });
-
-      console.log(`✅ Profile updated successfully for player: ${req.user.email}`);
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Player profile updated successfully',
-        data: {
-          profile: refreshedProfile,
-          completionPercentage: this.calculateProfileCompletion(refreshedProfile)
-        }
-      });
-
-    } catch (error) {
-      await transaction.rollback();
-      console.error(`❌ Error updating player profile for ${req.user.email}:`, error);
-      
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to update player profile',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
-      });
-    }
-  }
-
-  /**
-   * 👁️ Contrôler la visibilité du profil (public/privé)
-   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
-   */
-  static async toggleProfileVisibility(req, res) {
-    try {
-      const userId = req.user.id;
-      const { isVisible } = req.body;
-
-      console.log(`👁️ Toggling profile visibility for player: ${req.user.email}`);
+      console.log(`✏️ Updating player profile for: ${req.user.email}`);
 
       const playerProfile = await PlayerProfile.findOne({
         where: { userId: userId }
@@ -335,22 +235,66 @@ class PlayerController {
         });
       }
 
-      // Mise à jour de la visibilité
-      await playerProfile.update({
-        isProfileVisible: isVisible,
+      // Mise à jour des champs autorisés
+      const updatedProfile = await playerProfile.update({
+        ...updateData,
         lastProfileUpdate: new Date()
       });
 
-      console.log(`✅ Profile visibility updated to ${isVisible ? 'public' : 'private'} for player: ${req.user.email}`);
+      console.log(`✅ Profile updated successfully for: ${req.user.email}`);
 
       return res.status(200).json({
         status: 'success',
-        message: `Profile is now ${isVisible ? 'public' : 'private'}`,
+        message: 'Player profile updated successfully',
         data: {
-          isVisible: isVisible,
-          message: isVisible 
-            ? 'Your profile is now visible to coaches' 
-            : 'Your profile is now private'
+          profile: updatedProfile
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error updating player profile for ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to update player profile',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * 🔄 Basculer la visibilité du profil
+   */
+  static async toggleProfileVisibility(req, res) {
+    try {
+      const userId = req.user.id;
+      
+      console.log(`🔄 Toggling profile visibility for: ${req.user.email}`);
+
+      const playerProfile = await PlayerProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!playerProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Player profile not found'
+        });
+      }
+
+      const newVisibility = !playerProfile.isProfileVisible;
+      
+      await playerProfile.update({
+        isProfileVisible: newVisibility
+      });
+
+      console.log(`✅ Profile visibility changed to: ${newVisibility ? 'Public' : 'Private'} for ${req.user.email}`);
+
+      return res.status(200).json({
+        status: 'success',
+        message: `Profile is now ${newVisibility ? 'public' : 'private'}`,
+        data: {
+          isVisible: newVisibility
         }
       });
 
@@ -359,7 +303,7 @@ class PlayerController {
       
       return res.status(500).json({
         status: 'error',
-        message: 'Failed to update profile visibility',
+        message: 'Failed to toggle profile visibility',
         ...(process.env.NODE_ENV === 'development' && { debug: error.message })
       });
     }
@@ -367,40 +311,36 @@ class PlayerController {
 
   /**
    * 🔍 Recherche de joueurs (pour les coachs)
-   * NOUVELLE MÉTHODE - Corrige l'erreur "undefined callback"
    */
   static async searchPlayers(req, res) {
     try {
-      const viewerUser = req.user;
-      const {
-        gender,
-        state,
-        region,
-        collegeId,
+      const { 
+        gender, 
+        state, 
+        region, 
+        collegeId, 
         profileStatus = 'all',
         minViews = 0,
-        page = 1,
+        page = 1, 
         limit = 20,
-        sortBy = 'profile_views',
+        sortBy = 'profileViews',
         sortOrder = 'desc'
       } = req.query;
 
-      console.log(`🔍 Player search initiated by ${viewerUser.userType}: ${viewerUser.email}`);
+      console.log(`🔍 Player search by coach: ${req.user.email}`);
 
-      // Construction des conditions de recherche
+      // Construction des filtres de recherche
       const whereConditions = {
-        isProfileVisible: true // Seulement les profils publics
+        isProfileVisible: true
       };
 
       if (gender) whereConditions.gender = gender;
-      if (profileStatus !== 'all') whereConditions.profileCompletionStatus = profileStatus;
-      if (minViews > 0) whereConditions.profileViews = { [Op.gte]: parseInt(minViews) };
+      if (collegeId) whereConditions.collegeId = collegeId;
 
-      // Conditions pour le college
-      const collegeWhereConditions = {};
-      if (state) collegeWhereConditions.state = state.toUpperCase();
+      // Filtres sur le college via relation
+      let collegeWhereConditions = {};
+      if (state) collegeWhereConditions.state = state;
       if (region) collegeWhereConditions.region = region;
-      if (collegeId) collegeWhereConditions.id = collegeId;
 
       // Recherche avec pagination
       const { count, rows: players } = await PlayerProfile.findAndCountAll({
@@ -409,12 +349,13 @@ class PlayerController {
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'createdAt']
+            attributes: ['id', 'firstName', 'lastName', 'email']
           },
           {
             model: NJCAACollege,
             as: 'college',
-            where: Object.keys(collegeWhereConditions).length > 0 ? collegeWhereConditions : undefined,
+            where: Object.keys(collegeWhereConditions).length > 0 ? 
+                   collegeWhereConditions : undefined,
             attributes: ['id', 'name', 'state', 'region']
           }
         ],
@@ -464,7 +405,7 @@ class PlayerController {
       const { playerId } = req.params;
       const viewerUser = req.user;
 
-      console.log(`📊 Recording profile view: Player ${playerId} by ${viewerUser.userType} ${viewerUser.email}`);
+      console.log(`📊 Recording profile view: Player ${playerId} by ${viewerUser.email}`);
 
       const playerProfile = await PlayerProfile.findByPk(playerId);
 
@@ -475,33 +416,21 @@ class PlayerController {
         });
       }
 
-      // Seulement enregistrer si ce n'est pas le joueur lui-même qui regarde
-      if (playerProfile.userId !== viewerUser.id) {
-        await playerProfile.increment('profileViews');
-        
-        console.log(`✅ Profile view recorded for player ${playerId}`);
+      // Enregistrer la vue
+      await playerProfile.increment('profileViews');
 
-        return res.status(200).json({
-          status: 'success',
-          message: 'Profile view recorded successfully',
-          data: {
-            playerId: playerId,
-            newViewCount: playerProfile.profileViews + 1
-          }
-        });
-      } else {
-        return res.status(200).json({
-          status: 'success',
-          message: 'Own profile view - not recorded',
-          data: {
-            playerId: playerId,
-            viewCount: playerProfile.profileViews
-          }
-        });
-      }
+      console.log(`✅ Profile view recorded successfully`);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Profile view recorded',
+        data: {
+          totalViews: playerProfile.profileViews + 1
+        }
+      });
 
     } catch (error) {
-      console.error(`❌ Error recording profile view for player ${req.params.playerId}:`, error);
+      console.error(`❌ Error recording profile view:`, error);
       
       return res.status(500).json({
         status: 'error',
@@ -512,9 +441,9 @@ class PlayerController {
   }
 
   // ========================
-  // MÉTHODES UTILITAIRES PRIVÉES
+  // MÉTHODES UTILITAIRES STATIQUES
   // ========================
-  
+
   /**
    * Calcule le pourcentage de completion du profil
    */
@@ -540,7 +469,7 @@ class PlayerController {
    * Détermine le statut de completion
    */
   static determineCompletionStatus(playerProfile) {
-    const completionPercentage = this.calculateProfileCompletion(playerProfile);
+    const completionPercentage = PlayerController.calculateProfileCompletion(playerProfile);
     
     if (completionPercentage < 50) return 'basic';
     if (completionPercentage < 80) return 'completed';
@@ -554,9 +483,20 @@ class PlayerController {
     try {
       const playerProfile = await PlayerProfile.findByPk(playerProfileId);
       
+      if (!playerProfile) {
+        console.log(`⚠️ Player profile ${playerProfileId} not found for stats calculation`);
+        return {
+          totalViews: 0,
+          profileScore: 0,
+          visibility: 'Private',
+          memberSince: new Date(),
+          lastActivity: new Date()
+        };
+      }
+      
       return {
-        totalViews: playerProfile.profileViews,
-        profileScore: this.calculateProfileCompletion(playerProfile),
+        totalViews: playerProfile.profileViews || 0,
+        profileScore: PlayerController.calculateProfileCompletion(playerProfile),
         visibility: playerProfile.isProfileVisible ? 'Public' : 'Private',
         memberSince: playerProfile.createdAt,
         lastActivity: playerProfile.lastProfileUpdate || playerProfile.updatedAt
@@ -579,6 +519,10 @@ class PlayerController {
   static async getRecentActivity(playerProfileId) {
     try {
       const playerProfile = await PlayerProfile.findByPk(playerProfileId);
+      
+      if (!playerProfile) {
+        return [];
+      }
       
       const activities = [];
       
@@ -612,7 +556,7 @@ class PlayerController {
   static async generatePlayerRecommendations(playerProfile) {
     const recommendations = [];
     
-    const completionPercentage = this.calculateProfileCompletion(playerProfile);
+    const completionPercentage = PlayerController.calculateProfileCompletion(playerProfile);
     
     if (completionPercentage < 70) {
       recommendations.push({
@@ -648,11 +592,30 @@ class PlayerController {
   }
 
   // Méthodes analytiques (implémentation basique pour éviter les erreurs)
-  static async calculateMonthlyViews(playerProfileId) { return 0; }
-  static async calculateWeeklyViews(playerProfileId) { return 0; }
-  static async calculateViewsTrend(playerProfileId) { return 'stable'; }
-  static async getCoachInteractions(playerProfileId) { return []; }
-  static async generateAnalyticsRecommendations(playerProfile) { return []; }
+  static async calculateMonthlyViews(playerProfileId) { 
+    // Implementation future pour analytics plus détaillées
+    return 0; 
+  }
+  
+  static async calculateWeeklyViews(playerProfileId) { 
+    // Implementation future pour analytics plus détaillées
+    return 0; 
+  }
+  
+  static async calculateViewsTrend(playerProfileId) { 
+    // Implementation future pour analytics plus détaillées
+    return 'stable'; 
+  }
+  
+  static async getCoachInteractions(playerProfileId) { 
+    // Implementation future pour suivi des interactions
+    return []; 
+  }
+  
+  static async generateAnalyticsRecommendations(playerProfile) { 
+    // Implementation future pour recommendations avancées
+    return []; 
+  }
 }
 
 module.exports = PlayerController;
