@@ -75,7 +75,7 @@ class AuthController {
       // ========================
       
       // Validation spécifique selon le type d'utilisateur
-      const profileValidation = await this.validateProfileData(userType, profileData);
+      const profileValidation = await AuthController.validateProfileData(userType, profileData);
       if (!profileValidation.isValid) {
         await transaction.rollback();
         return res.status(400).json({
@@ -112,9 +112,9 @@ class AuthController {
       // Créer le profil spécialisé selon le type d'utilisateur
       let profile = null;
       if (userType === 'player') {
-        profile = await this.createPlayerProfile(newUser.id, profileData, transaction);
+        profile = await AuthController.createPlayerProfile(newUser.id, profileData, transaction);
       } else if (userType === 'coach') {
-        profile = await this.createCoachProfile(newUser.id, profileData, transaction);
+        profile = await AuthController.createCoachProfile(newUser.id, profileData, transaction);
       }
 
       // ========================
@@ -152,7 +152,7 @@ class AuthController {
         });
 
       // 2. Notification aux admins pour traitement
-      this.notifyAdminsOfNewRegistration(newUser)
+      AuthController.notifyAdminsOfNewRegistration(newUser)
         .then(() => {
           console.log(`📧 Admin notification sent for new ${userType}: ${newUser.email}`);
         })

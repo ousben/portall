@@ -11,7 +11,7 @@
     "db:migrate:undo": "sequelize db:migrate:undo",
     "db:seed": "sequelize db:seed:all",
     "test:setup": "node scripts/setup-test-environment.js",
-    "test:auth": "npm run test:setup && node test-registration-flow.js",
+    "test:auth": "node test-registration-flow.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

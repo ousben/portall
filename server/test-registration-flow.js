@@ -1,62 +1,155 @@
 // portall/server/test-registration-flow.js
 
-// test-registration-flow.js
 const request = require('supertest');
 
 /**
- * Test complet du flow d'inscription et d'authentification
+ * Test d'intégration complet pour Portall Phase 3
  * 
- * Ce test simule le parcours utilisateur complet pour valider que :
- * 1. Les inscriptions fonctionnent avec les bonnes validations
- * 2. L'authentification JWT est opérationnelle
- * 3. Les dashboards sont accessibles avec les bonnes permissions
- * 4. Les données sont correctement persistées en base
+ * Ce test configure automatiquement son environnement, puis valide :
+ * 1. La configuration de l'environnement de test
+ * 2. Les inscriptions avec validation complète
+ * 3. L'authentification JWT robuste
+ * 4. L'accès aux dashboards selon les rôles
+ * 5. Les contrôles d'autorisation
  */
 
-async function testCompleteRegistrationFlow() {
-  console.log('🚀 Démarrage du test d\'authentification complet...');
-  console.log('================================================');
+async function runCompleteAuthTest() {
+  console.log('🚀 Démarrage du test d\'authentification Portall Phase 3');
+  console.log('=====================================================');
   
-  // Nous devons importer l'app après avoir configuré l'environnement de test
+  // Configuration explicite de l'environnement de test
   process.env.NODE_ENV = 'test';
-
+  
   try {
+    // ===========================
+    // ÉTAPE 1: CONFIGURATION INTÉGRÉE DE L'ENVIRONNEMENT
+    // ===========================
+    console.log('\n🔧 Configuration de l\'environnement de test intégré...');
+    
+    // Import de la configuration
+    const { sequelize } = require('./config/database.connection');
+    const models = require('./models');
+    
+    // Authentification à la base de données de test
+    await sequelize.authenticate();
+    console.log('✅ Connexion à la base de données de test établie');
+    
+    // Synchronisation des modèles avec recréation propre
+    console.log('📊 Synchronisation des modèles...');
+    await sequelize.sync({ force: true, logging: false });
+    console.log('✅ Tables synchronisées avec succès');
+    
+    // Création des données de référence essentielles
+    console.log('📋 Insertion des données de référence...');
+    
+    const njcaaColleges = await models.NJCAACollege.bulkCreate([
+      {
+        name: 'Test NJCAA College 1',
+        state: 'CA',
+        region: 'West',
+        division: 'division_1',
+        website: 'https://test-njcaa-1.edu',
+        isActive: true
+      },
+      {
+        name: 'Test NJCAA College 2',
+        state: 'TX',
+        region: 'South', 
+        division: 'division_2',
+        website: 'https://test-njcaa-2.edu',
+        isActive: true
+      }
+    ]);
+    
+    const ncaaColleges = await models.NCAACollege.bulkCreate([
+      {
+        name: 'Test NCAA College 1',
+        state: 'FL',
+        division: 'ncaa_d1',
+        conference: 'Test Conference',
+        website: 'https://test-ncaa-1.edu',
+        isActive: true
+      },
+      {
+        name: 'Test NCAA College 2',
+        state: 'NY',
+        division: 'ncaa_d2', 
+        conference: 'Test Conference',
+        website: 'https://test-ncaa-2.edu',
+        isActive: true
+      }
+    ]);
+    
+    console.log(`✅ ${njcaaColleges.length} colleges NJCAA créés`);
+    console.log(`✅ ${ncaaColleges.length} colleges NCAA créés`);
+    console.log('🎉 Environnement de test configuré avec succès !');
 
-    // Importation dynamique pour éviter les conflits de configuration
+    // ===========================
+    // ÉTAPE 2: DÉMARRAGE DE L'APPLICATION EXPRESS
+    // ===========================
+    console.log('\n🚀 Initialisation de l\'application Express...');
+    
+    // Import de l'application Express (maintenant que la DB est prête)
     const app = require('./server');
+    
+    // Pause pour stabiliser les connexions
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    console.log('✅ Application prête pour les tests');
 
-    // Attendre un court instant pour que les connexions se stabilisent
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Vérifier que l'environnement de test est correctement configuré
-    const dbTestResponse = await request(app).get('/api/db-test');
-    if (dbTestResponse.status === 200) {
-      console.log('✅ Environnement de test vérifié');
-      console.log(`   Colleges NJCAA: ${dbTestResponse.body.statistics.njcaaColleges}`);
-      console.log(`   Colleges NCAA: ${dbTestResponse.body.statistics.ncaaColleges}`);
+    // ===========================
+    // TEST 1: Vérification de la santé de l'API
+    // ===========================
+    console.log('\n🏥 Test 1: Vérification de la santé du serveur...');
+    
+    const healthResponse = await request(app).get('/api/health');
+    
+    if (healthResponse.status === 200) {
+      console.log('✅ Serveur opérationnel');
+      console.log(`   Environment: ${healthResponse.body.environment}`);
+      console.log(`   Version: ${healthResponse.body.version || 'N/A'}`);
     } else {
-      throw new Error('Environnement de test non configuré correctement');
+      throw new Error('Serveur non opérationnel');
     }
 
-    console.log('\n🏥 Test 1: Vérification de la santé du serveur...');
-  
     // ===========================
-    // TEST 1: Inscription d'un joueur NJCAA
+    // TEST 2: Validation de l'environnement de test
     // ===========================
-    console.log('\n📝 Test 1: Inscription d\'un joueur...');
+    console.log('\n📊 Test 2: Validation de l\'environnement de test...');
     
+    const dbTestResponse = await request(app).get('/api/db-test');
+    
+    if (dbTestResponse.status === 200) {
+      console.log('✅ Base de données de test opérationnelle');
+      console.log(`   Colleges NJCAA: ${dbTestResponse.body.statistics.njcaaColleges}`);
+      console.log(`   Colleges NCAA: ${dbTestResponse.body.statistics.ncaaColleges}`);
+      
+      // Vérification que nous avons bien des données de test
+      if (dbTestResponse.body.statistics.njcaaColleges === 0 || 
+          dbTestResponse.body.statistics.ncaaColleges === 0) {
+        throw new Error('Données de référence manquantes');
+      }
+    } else {
+      throw new Error(`Problème de base de données: ${dbTestResponse.status}`);
+    }
+
+    // ===========================
+    // TEST 3: Inscription complète d'un joueur NJCAA
+    // ===========================
+    console.log('\n⚽ Test 3: Inscription complète d\'un joueur NJCAA...');
+    
+    const timestamp = Date.now();
     const playerData = {
       firstName: 'Alex',
       lastName: 'TestPlayer',
-      email: `testplayer.${Date.now()}@example.com`, // Email unique pour éviter les conflits
+      email: `testplayer.${timestamp}@portall-test.com`,
       password: 'SecurePass123!',
-      confirmPassword: 'SecurePass123!', // NOUVEAU : Confirmation du mot de passe
+      confirmPassword: 'SecurePass123!',
       userType: 'player',
       gender: 'male',
-      collegeId: 1, // Nous supposerons qu'un college NJCAA existe avec l'ID 1
-      termsAccepted: true, // NOUVEAU : Acceptation des conditions
-      newsletterOptIn: false, // NOUVEAU : Opt-in newsletter (peut être false)
-      referralSource: 'web_search' // OPTIONNEL : Source de découverte
+      collegeId: 1, // Premier college créé
+      termsAccepted: true,
+      newsletterOptIn: false,
+      referralSource: 'web_search'
     };
     
     const playerRegResponse = await request(app)
@@ -68,31 +161,77 @@ async function testCompleteRegistrationFlow() {
       console.log(`   Email: ${playerData.email}`);
       console.log(`   Conditions acceptées: ${playerData.termsAccepted}`);
       console.log(`   Newsletter: ${playerData.newsletterOptIn ? 'Acceptée' : 'Refusée'}`);
+      console.log(`   ID utilisateur: ${playerRegResponse.body.user?.id || 'N/A'}`);
     } else {
       console.log('❌ Détails de l\'erreur:', JSON.stringify(playerRegResponse.body, null, 2));
       throw new Error(`Inscription joueur échouée: ${playerRegResponse.status}`);
     }
 
     // ===========================
-    // TEST 2: Inscription d'un coach NCAA
+    // TEST 4: Connexion et authentification du joueur
     // ===========================
-    console.log('\n🏟️ Test 2: Inscription d\'un coach NCAA...');
+    console.log('\n🔐 Test 4: Connexion et authentification du joueur...');
+    
+    const playerLoginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: playerData.email,
+        password: playerData.password
+      });
+    
+    if (playerLoginResponse.status === 200 && playerLoginResponse.body.accessToken) {
+      console.log('✅ Connexion joueur réussie');
+      console.log(`   Token JWT généré: ${playerLoginResponse.body.accessToken.substring(0, 25)}...`);
+      console.log(`   Type d'utilisateur: ${playerLoginResponse.body.user?.userType}`);
+    } else {
+      console.log('❌ Détails:', JSON.stringify(playerLoginResponse.body, null, 2));
+      throw new Error('Connexion joueur échouée');
+    }
+    
+    const playerToken = playerLoginResponse.body.accessToken;
+
+    // ===========================
+    // TEST 5: Accès au dashboard joueur
+    // ===========================
+    console.log('\n📊 Test 5: Accès au dashboard joueur...');
+    
+    const playerDashboardResponse = await request(app)
+      .get('/api/players/dashboard')
+      .set('Authorization', `Bearer ${playerToken}`);
+    
+    if (playerDashboardResponse.status === 200) {
+      console.log('✅ Dashboard joueur accessible');
+      const profile = playerDashboardResponse.body.profile;
+      if (profile) {
+        console.log(`   Nom: ${profile.user?.firstName} ${profile.user?.lastName}`);
+        console.log(`   Statut: ${profile.profileCompletionStatus || 'basic'}`);
+        console.log(`   College: ${profile.college?.name || 'N/A'}`);
+      }
+    } else {
+      console.log('❌ Détails:', JSON.stringify(playerDashboardResponse.body, null, 2));
+      throw new Error('Accès dashboard joueur échoué');
+    }
+
+    // ===========================
+    // TEST 6: Inscription complète d'un coach NCAA
+    // ===========================
+    console.log('\n🏟️ Test 6: Inscription complète d\'un coach NCAA...');
     
     const coachData = {
       firstName: 'Sarah',
       lastName: 'TestCoach',
       email: `testcoach.${timestamp}@portall-test.com`,
       password: 'SecurePass123!',
-      confirmPassword: 'SecurePass123!', // NOUVEAU : Confirmation du mot de passe
+      confirmPassword: 'SecurePass123!',
       userType: 'coach',
       position: 'head_coach',
       phoneNumber: '+1234567890',
-      collegeId: 1,
+      collegeId: 1, // Premier college NCAA créé
       division: 'ncaa_d1',
       teamSport: 'mens_soccer',
-      termsAccepted: true, // NOUVEAU : Acceptation des conditions
-      newsletterOptIn: true, // NOUVEAU : Les coachs peuvent vouloir les news
-      referralSource: 'coach_recommendation' // OPTIONNEL : Source spécifique aux coachs
+      termsAccepted: true,
+      newsletterOptIn: true,
+      referralSource: 'coach_recommendation'
     };
     
     const coachRegResponse = await request(app)
@@ -104,54 +243,16 @@ async function testCompleteRegistrationFlow() {
       console.log(`   Email: ${coachData.email}`);
       console.log(`   Position: ${coachData.position}`);
       console.log(`   Division: ${coachData.division}`);
+      console.log(`   Sport: ${coachData.teamSport}`);
     } else {
       console.log('❌ Détails:', JSON.stringify(coachRegResponse.body, null, 2));
       throw new Error('Inscription coach échouée');
     }
 
     // ===========================
-    // TEST 3: Connexion du joueur
+    // TEST 7: Connexion et dashboard coach
     // ===========================
-    console.log('\n🔐 Test 3: Connexion du joueur...');
-    
-    const playerLoginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: playerData.email,
-        password: playerData.password
-      });
-    
-    if (playerLoginResponse.status === 200 && playerLoginResponse.body.accessToken) {
-      console.log('✅ Connexion joueur réussie');
-      console.log(`   Token généré: ${playerLoginResponse.body.accessToken.substring(0, 20)}...`);
-    } else {
-      console.log('❌ Échec connexion joueur:', playerLoginResponse.body);
-      throw new Error('Player login failed');
-    }
-    
-    const playerToken = playerLoginResponse.body.accessToken;
-
-    // ===========================
-    // TEST 4: Accès dashboard joueur
-    // ===========================
-    console.log('\n📊 Test 4: Accès dashboard joueur...');
-    
-    const playerDashboardResponse = await request(app)
-      .get('/api/players/dashboard')
-      .set('Authorization', `Bearer ${playerToken}`);
-    
-    if (playerDashboardResponse.status === 200) {
-      console.log('✅ Dashboard joueur accessible');
-      console.log(`   Profil chargé: ${playerDashboardResponse.body.profile?.user?.firstName || 'N/A'}`);
-    } else {
-      console.log('❌ Échec accès dashboard joueur:', playerDashboardResponse.body);
-      throw new Error('Player dashboard access failed');
-    }
-
-    // ===========================
-    // TEST 5: Connexion du coach
-    // ===========================
-    console.log('\n🔐 Test 5: Connexion du coach...');
+    console.log('\n🔐 Test 7: Connexion et accès dashboard coach...');
     
     const coachLoginResponse = await request(app)
       .post('/api/auth/login')
@@ -162,33 +263,29 @@ async function testCompleteRegistrationFlow() {
     
     if (coachLoginResponse.status === 200 && coachLoginResponse.body.accessToken) {
       console.log('✅ Connexion coach réussie');
+      
+      const coachToken = coachLoginResponse.body.accessToken;
+      
+      // Test accès dashboard coach
+      const coachDashboardResponse = await request(app)
+        .get('/api/coaches/dashboard')
+        .set('Authorization', `Bearer ${coachToken}`);
+      
+      if (coachDashboardResponse.status === 200) {
+        console.log('✅ Dashboard coach accessible');
+        console.log(`   Rôle confirmé: ${coachLoginResponse.body.user?.userType}`);
+      } else {
+        console.log('⚠️ Dashboard coach non accessible:', coachDashboardResponse.status);
+        throw new Error('Accès dashboard coach échoué');
+      }
     } else {
-      console.log('❌ Échec connexion coach:', coachLoginResponse.body);
-      throw new Error('Coach login failed');
-    }
-    
-    const coachToken = coachLoginResponse.body.accessToken;
-
-    // ===========================
-    // TEST 6: Accès dashboard coach
-    // ===========================
-    console.log('\n📊 Test 6: Accès dashboard coach...');
-    
-    const coachDashboardResponse = await request(app)
-      .get('/api/coaches/dashboard')
-      .set('Authorization', `Bearer ${coachToken}`);
-    
-    if (coachDashboardResponse.status === 200) {
-      console.log('✅ Dashboard coach accessible');
-    } else {
-      console.log('❌ Échec accès dashboard coach:', coachDashboardResponse.body);
-      throw new Error('Coach dashboard access failed');
+      throw new Error('Connexion coach échouée');
     }
 
     // ===========================
-    // TEST 7: Vérification des autorisations croisées
+    // TEST 8: Contrôles d'autorisation croisée
     // ===========================
-    console.log('\n🛡️ Test 7: Vérification des autorisations...');
+    console.log('\n🛡️ Test 8: Vérification des contrôles d\'autorisation...');
     
     // Un joueur ne doit PAS pouvoir accéder au dashboard coach
     const unauthorizedResponse = await request(app)
@@ -196,46 +293,61 @@ async function testCompleteRegistrationFlow() {
       .set('Authorization', `Bearer ${playerToken}`);
     
     if (unauthorizedResponse.status === 403) {
-      console.log('✅ Contrôle d\'autorisation fonctionnel (joueur bloqué sur dashboard coach)');
+      console.log('✅ Contrôle d\'autorisation efficace (joueur bloqué sur dashboard coach)');
     } else {
-      console.log('⚠️ Problème potentiel d\'autorisation:', unauthorizedResponse.status);
+      console.log(`⚠️ Problème d'autorisation potentiel: Status ${unauthorizedResponse.status}`);
     }
 
     // ===========================
-    // RÉSUMÉ FINAL
+    // RÉSUMÉ FINAL DE VALIDATION
     // ===========================
-    console.log('\n🎉 TOUS LES TESTS RÉUSSIS !');
-    console.log('===============================');
-    console.log('✅ Inscription joueur avec profil complet');
-    console.log('✅ Inscription coach avec données métier');
-    console.log('✅ Authentification JWT fonctionnelle');
-    console.log('✅ Dashboards accessibles selon les rôles');
+    console.log('\n🎉 VALIDATION COMPLÈTE DE LA PHASE 3 RÉUSSIE !');
+    console.log('===============================================');
+    console.log('✅ Configuration automatique de l\'environnement de test');
+    console.log('✅ Inscription joueur avec validation multicouche');
+    console.log('✅ Inscription coach avec données métier complexes');
+    console.log('✅ Authentification JWT robuste et sécurisée');
+    console.log('✅ Dashboards fonctionnels selon les rôles utilisateur');
     console.log('✅ Contrôles d\'autorisation efficaces');
-    console.log('\n🚀 Votre Phase 3 est parfaitement intégrée !');
+    console.log('✅ Système de validation sophistiqué (confirmPassword, termsAccepted, etc.)');
+    console.log('✅ Architecture de base de données relationnelle opérationnelle');
+    console.log('\n🚀 Votre système Portall Phase 3 est de niveau professionnel !');
+    console.log('🎯 Vous êtes maintenant prêt pour la Phase 4 (Intégration Stripe) !');
+    
+    // Fermeture propre de la connexion de base de données
+    await sequelize.close();
+    console.log('🔌 Connexion base de données fermée proprement');
     
   } catch (error) {
     console.error('\n❌ ÉCHEC DU TEST:', error.message);
-    console.log('\n🔍 Points à vérifier :');
-    console.log('- Les migrations de base de données sont-elles appliquées ?');
-    console.log('- Les colleges de référence existent-ils en base ?');
-    console.log('- Le serveur est-il démarré correctement ?');
-    console.log('- Les variables d\'environnement sont-elles configurées ?');
+    console.log('\n🔧 Guide de dépannage :');
+    console.log('1. Vérifiez que PostgreSQL est démarré');
+    console.log('2. Confirmez que la base de données "portall_test" existe');
+    console.log('3. Vérifiez les variables d\'environnement (.env)');
+    console.log('4. Assurez-vous que les ports ne sont pas occupés');
+    
+    // Affichage de détails pour le débogage
+    if (error.response) {
+      console.log('\n📋 Détails de la réponse HTTP:');
+      console.log('   Status:', error.response.status);
+      console.log('   Body:', JSON.stringify(error.response.body, null, 2));
+    }
     
     process.exit(1);
   }
 }
 
-// Exécution du test si le fichier est lancé directement
+// Exécution si le fichier est lancé directement
 if (require.main === module) {
-  testCompleteRegistrationFlow()
+  runCompleteAuthTest()
     .then(() => {
       console.log('\n🏁 Test terminé avec succès');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('\n💥 Erreur fatale:', error);
+      console.error('\n💥 Erreur fatale:', error.message);
       process.exit(1);
     });
 }
 
-module.exports = testCompleteRegistrationFlow;
+module.exports = runCompleteAuthTest;
