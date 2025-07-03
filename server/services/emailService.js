@@ -6,6 +6,31 @@ const path = require('path');
 const handlebars = require('handlebars');
 require('../templates/emails/helpers');
 
+const isTestEnvironment = process.env.NODE_ENV === 'test';
+
+/**
+* Fonction de simulation d'envoi d'email pour les tests
+* 
+* Cette fonction simule le comportement du service d'emails
+* sans faire d'appels réseau réels, ce qui rend les tests
+* plus rapides et plus fiables.
+*/
+async function simulateEmailSend(emailData) {
+    console.log('📧 [TEST MODE] Simulating email send...');
+    console.log(`   To: ${emailData.to || emailData.email}`);
+    console.log(`   Subject: ${emailData.subject || 'Test Email'}`);
+    console.log(`   Type: ${emailData.template || 'generic'}`);
+    
+    // Simuler un délai réseau minimal pour réalisme
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    return {
+      success: true,
+      messageId: `test-${Date.now()}`,
+      message: 'Email simulated successfully in test environment'
+    };
+  }
+
 /**
  * Service d'email professionnel pour Portall avec support Gmail optimisé
  * 
@@ -291,18 +316,46 @@ class EmailService {
    */
   async sendWelcomeEmail(user) {
     const subject = `Welcome to Portall, ${user.firstName}! ⚽`;
-    
-    return await this.sendEmail({
-      to: user.email,
-      subject,
-      template: 'welcome',
-      data: {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        userType: user.userType,
-        supportEmail: process.env.SUPPORT_EMAIL || 'support@portall.com'
+
+    try {
+      // En mode test, simuler l'envoi
+      if (isTestEnvironment) {
+        return await simulateEmailSend({
+          to: user.email,
+          subject: 'Welcome to Portall',
+          template: 'welcome',
+          user: user
+        });
       }
-    });
+
+      return await this.sendEmail({
+        to: user.email,
+        subject,
+        template: 'welcome',
+        data: {
+          firstName: user.firstName,
+          lastName: user.lastName,
+          userType: user.userType,
+          supportEmail: process.env.SUPPORT_EMAIL || 'support@portall.com'
+        }
+      });
+      
+    } catch (error) {
+      console.error('❌ Welcome email error:', error);
+      
+      // En mode test, ne pas faire échouer le processus principal
+      if (isTestEnvironment) {
+        console.log('⚠️ [TEST MODE] Email simulation failed, but continuing...');
+        return {
+          success: false,
+          error: error.message,
+          message: 'Email simulation failed in test environment'
+        };
+      }
+      
+      // En mode production, gérer l'erreur selon votre logique existante
+      throw error;
+    }
   }
 
   async sendAccountApprovedEmail(user, approvedBy) {
@@ -358,25 +411,55 @@ class EmailService {
     });
   }
 
+  /**
+   * Notification aux admins avec gestion d'environnement
+   */
   async sendNewRegistrationNotificationToAdmin(user, adminEmails) {
     const subject = `New ${user.userType} registration pending approval`;
-    
-    const promises = adminEmails.map(adminEmail => 
-      this.sendEmail({
-        to: adminEmail,
-        subject,
-        template: 'admin-new-registration',
-        data: {
-          userName: user.getFullName(),
-          userEmail: user.email,
-          userType: user.userType,
-          registrationDate: user.createdAt,
-          reviewUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/admin/users/${user.id}`
-        }
-      })
-    );
 
-    return await Promise.all(promises);
+    try {
+      // En mode test, simuler l'envoi
+      if (isTestEnvironment) {
+        return await simulateEmailSend({
+          to: adminEmails.join(', '),
+          subject: 'New Registration - Admin Notification',
+          template: 'admin-notification',
+          user: user
+        });
+      }
+      
+      const promises = adminEmails.map(adminEmail => 
+        this.sendEmail({
+          to: adminEmail,
+          subject,
+          template: 'admin-new-registration',
+          data: {
+            userName: user.getFullName(),
+            userEmail: user.email,
+            userType: user.userType,
+            registrationDate: user.createdAt,
+            reviewUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/admin/users/${user.id}`
+          }
+        })
+      );
+
+      return await Promise.all(promises);
+      
+    } catch (error) {
+      console.error('❌ Admin notification error:', error);
+      
+      // En mode test, ne pas faire échouer le processus principal
+      if (isTestEnvironment) {
+        console.log('⚠️ [TEST MODE] Admin notification simulation failed, but continuing...');
+        return {
+          success: false,
+          error: error.message,
+          message: 'Admin notification simulation failed in test environment'
+        };
+      }
+      
+      throw error;
+    }
   }
 }
 
