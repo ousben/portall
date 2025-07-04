@@ -34,7 +34,8 @@
     "nodemailer": "^7.0.4",
     "pg": "^8.16.0",
     "pg-hstore": "^2.3.4",
-    "sequelize": "^6.37.7"
+    "sequelize": "^6.37.7",
+    "stripe": "^18.3.0"
   },
   "devDependencies": {
     "jest": "^30.0.4",
