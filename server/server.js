@@ -18,6 +18,8 @@ const adminRoutes = require('./routes/admin');
 // NOUVEAUX : Routes dashboard utilisateurs
 const playerRoutes = require('./routes/players');
 const coachRoutes = require('./routes/coaches');
+// Import des routes pour la subscription
+const subscriptionRoutes = require('./routes/subscriptions');
 
 // Création de l'application Express
 const app = express();
@@ -56,6 +58,10 @@ app.use('/api/admin', adminRoutes);
 // NOUVEAUX : Routes dashboard utilisateurs
 app.use('/api/players', playerRoutes);
 app.use('/api/coaches', coachRoutes);
+
+// Dans la section où vous définissez vos routes, ajoutez :
+app.use('/api/subscriptions', subscriptionRoutes);
+console.log('💳 Subscription routes loaded at /api/subscriptions');
 
 // NOUVEAU : Routes de test pour les emails (uniquement en développement)
 if (process.env.NODE_ENV === 'development') {
