@@ -12,6 +12,7 @@
     "db:seed": "sequelize db:seed:all",
     "test:setup": "node scripts/setup-test-environment.js",
     "test:auth": "node test-registration-flow.js",
+    "stripe:sync": "node scripts/sync-stripe-plans.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
