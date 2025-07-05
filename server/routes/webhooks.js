@@ -84,7 +84,7 @@ const rawBodyMiddleware = (req, res, next) => {
   // Vérifier que c'est bien un webhook Stripe
   const contentType = req.get('Content-Type');
   
-  if (contentType !== 'application/json') {
+  if (!contentType || !contentType.startsWith('application/json')) {
     console.warn(`⚠️ Unexpected content-type for webhook: ${contentType}`);
     return res.status(400).json({
       status: 'error',
