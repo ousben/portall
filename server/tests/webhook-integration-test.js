@@ -4,59 +4,47 @@ const request = require('supertest');
 const app = require('../server');
 const { sequelize } = require('../config/database.connection');
 
-// Import des modèles pour les tests isolés
-const User = require('../models/User')(sequelize, sequelize.Sequelize.DataTypes);
-const SubscriptionPlan = require('../models/SubscriptionPlan')(sequelize, sequelize.Sequelize.DataTypes);
-const UserSubscription = require('../models/UserSubscription')(sequelize, sequelize.Sequelize.DataTypes);
-const PaymentHistory = require('../models/PaymentHistory')(sequelize, sequelize.Sequelize.DataTypes);
+// ✅ SOLUTION : Utiliser le système d'associations centralisé
+const db = require('../models'); // Ceci charge TOUS les modèles avec leurs associations
+
+// Extraire les modèles du système d'associations
+const { User, SubscriptionPlan, UserSubscription, PaymentHistory } = db;
 
 /**
- * 🧪 SUITE DE TESTS D'INTÉGRATION WEBHOOK - VERSION CORRIGÉE
+ * 🧪 SUITE DE TESTS D'INTÉGRATION WEBHOOK - VERSION AVEC ASSOCIATIONS CORRECTES
  * 
- * Cette version résout le problème de validation display_order en utilisant
- * un billing_interval différent pour les tests (week au lieu de month).
+ * CORRECTION PRINCIPALE : Utilisation du système d'associations centralisé
  * 
- * Concepts clés pour comprendre ce test :
+ * Au lieu d'importer chaque modèle individuellement (ce qui ne charge pas les associations),
+ * nous utilisons require('../models') qui charge automatiquement tous les modèles
+ * ET exécute leurs associations via model.associate(db).
  * 
- * 1. ISOLATION : Ce test crée ses propres données pour ne pas interférer
- *    avec vos données de développement existantes
- * 
- * 2. WEBHOOK SIMULATION : On simule les appels que Stripe ferait à votre
- *    serveur quand des événements de paiement se produisent
- * 
- * 3. VALIDATION COMPLÈTE : On teste à la fois la sécurité (signatures)
- *    et la logique métier (mise à jour des abonnements)
+ * C'est la différence entre construire des maisons isolées vs un quartier connecté !
  */
 
-// Fonctions utilitaires pour créer des données de test uniques
+// Fonctions utilitaires inchangées
 function generateUniqueTestId(prefix) {
-  // Crée un ID unique basé sur le timestamp et un random
-  // Exemple : "price_1704123456789_abc123"
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 }
 
 function createTestStripeEvent(eventType, data = {}, metadata = {}) {
-  // Simule la structure exacte d'un événement Stripe webhook
-  // Cette structure correspond à ce que votre WebhookService attend
   return {
-    id: `evt_${Date.now()}`, // ID unique pour cet événement
+    id: `evt_${Date.now()}`,
     object: 'event',
-    type: eventType, // Type d'événement (payment_intent.succeeded, etc.)
+    type: eventType,
     data: {
       object: {
         id: `${eventType.split('.')[0]}_test_${Date.now()}`,
-        ...data, // Données spécifiques à l'événement
-        metadata: metadata // Métadonnées pour lier à vos données Portall
+        ...data,
+        metadata: metadata
       }
     },
-    created: Math.floor(Date.now() / 1000), // Timestamp Unix
-    livemode: false // Indique que c'est un test
+    created: Math.floor(Date.now() / 1000),
+    livemode: false
   };
 }
 
 function generateStripeSignature(payload, secret) {
-  // Génère une signature HMAC-SHA256 valide comme le ferait Stripe
-  // Cette signature prouve que le webhook vient bien de Stripe
   const crypto = require('crypto');
   const timestamp = Math.floor(Date.now() / 1000);
   const signature = crypto
@@ -64,26 +52,29 @@ function generateStripeSignature(payload, secret) {
     .update(`${timestamp}.${payload}`)
     .digest('hex');
   
-  // Format exact attendu par Stripe : "t=timestamp,v1=signature"
   return `t=${timestamp},v1=${signature}`;
 }
 
 /**
- * 🔧 Fonction corrigée pour créer des données de test isolées
+ * 🔧 Fonction de création de données avec associations fonctionnelles
  * 
- * CHANGEMENT PRINCIPAL : Au lieu d'utiliser billing_interval: 'month'
- * qui nécessite display_order = 1, on utilise 'week' qui évite
- * complètement cette validation stricte.
+ * Maintenant que nous utilisons le système d'associations centralisé,
+ * les modèles peuvent correctement établir leurs relations.
  */
 async function createIsolatedTestData() {
-  console.log('📝 Creating isolated test data...');
+  console.log('📝 Creating isolated test data with proper Sequelize associations...');
+  
+  const transaction = await sequelize.transaction();
   
   try {
-    // Générer des identifiants complètement uniques pour ce test
-    const uniqueStripeId = generateUniqueTestId('price');
-    const uniqueEmail = `webhook.test.${Date.now()}@portall.com`;
-    const uniqueCustomerId = generateUniqueTestId('cus');
-    const uniqueSubscriptionId = generateUniqueTestId('sub');
+    // Générer des identifiants uniques
+    const uniqueTimestamp = Date.now();
+    const uniqueRandom = Math.random().toString(36).substring(7);
+    
+    const uniqueStripeId = `price_test_${uniqueTimestamp}_${uniqueRandom}`;
+    const uniqueEmail = `webhook.test.${uniqueTimestamp}@portall.com`;
+    const uniqueCustomerId = `cus_test_${uniqueTimestamp}_${uniqueRandom}`;
+    const uniqueSubscriptionId = `sub_test_${uniqueTimestamp}_${uniqueRandom}`;
     
     console.log(`🔧 Using unique identifiers:`, {
       stripeId: uniqueStripeId,
@@ -92,21 +83,17 @@ async function createIsolatedTestData() {
       subscriptionId: uniqueSubscriptionId
     });
     
-    // 🎯 SOLUTION AU PROBLÈME DE VALIDATION
-    // 
-    // Au lieu de créer un plan avec billing_interval: 'month' qui DOIT
-    // avoir display_order = 1, on utilise 'week' qui n'a pas cette contrainte.
-    // 
-    // Cela nous permet de tester la logique webhook sans nous préoccuper
-    // des validations métier spécifiques aux plans de production.
+    // ===== ÉTAPE 1 : CRÉER LE PLAN DE TEST =====
+    console.log('📋 Creating test subscription plan...');
+    
     const testPlan = await SubscriptionPlan.create({
-      name: 'Test Plan Weekly - Isolated',
-      description: 'Plan de test isolé pour webhooks (cycle hebdomadaire)',
-      price_in_cents: 999, // Prix différent pour éviter les conflits avec les vrais plans
+      name: 'Test Plan Weekly - Webhook Integration',
+      description: 'Plan de test isolé pour validation webhook (billing_interval = week)',
+      price_in_cents: 999,
       currency: 'USD',
-      billing_interval: 'week', // ✅ Évite la validation stricte display_order
+      billing_interval: 'week',
       allowed_user_types: ['coach', 'player'],
-      features: { 
+      features: {
         profileAccess: true,
         searchAccess: true,
         contactCoaches: true,
@@ -114,154 +101,235 @@ async function createIsolatedTestData() {
         favoriteProfiles: true,
         analyticsBasic: true
       },
-      stripe_price_id: uniqueStripeId, // ID Stripe unique pour ce test
+      stripe_price_id: uniqueStripeId,
       is_active: true,
-      display_order: 999 // ✅ Maintenant accepté car billing_interval = 'week'
-    });
+      display_order: 999
+    }, { transaction });
     
-    // Créer un utilisateur de test avec un email unique
-    // Cela évite les conflits avec vos utilisateurs existants
+    console.log(`✅ Test plan created with ID: ${testPlan.id}`);
+    
+    // ===== ÉTAPE 2 : CRÉER L'UTILISATEUR DE TEST =====
+    console.log('👤 Creating test user...');
+    
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash('TestPass123!', 10);
     
+    // ✅ Utiliser camelCase pour User (avec mappings automatiques)
     const testUser = await User.create({
+      email: uniqueEmail,
+      password: hashedPassword,
       firstName: 'Test',
       lastName: 'Webhook',
-      email: uniqueEmail, // Email unique pour éviter les conflits
-      password: hashedPassword,
       userType: 'coach',
       isActive: true,
       isEmailVerified: true,
       stripeCustomerId: uniqueCustomerId
-    });
+    }, { transaction });
     
-    // Créer un abonnement de test dans l'état 'pending'
-    // Les webhooks vont le faire passer à 'active' si tout va bien
+    console.log(`✅ Test user created with ID: ${testUser.id}`);
+    console.log(`   📝 User details: ${testUser.firstName} ${testUser.lastName} (${testUser.email})`);
+    
+    // ===== ÉTAPE 3 : CRÉER L'ABONNEMENT DE TEST =====
+    console.log('💳 Creating test subscription...');
+    
+    // ✅ Utiliser snake_case pour UserSubscription (sans mappings)
     const testSubscription = await UserSubscription.create({
-      userId: testUser.id,
-      planId: testPlan.id,
-      status: 'pending', // État initial avant confirmation de paiement
-      stripeSubscriptionId: uniqueSubscriptionId,
-      stripeCustomerId: uniqueCustomerId,
-      startedAt: new Date(),
-      endsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 1 semaine plus tard
+      user_id: testUser.id,
+      plan_id: testPlan.id,
+      status: 'pending',
+      stripe_subscription_id: uniqueSubscriptionId,
+      stripe_customer_id: uniqueCustomerId,
+      started_at: new Date(),
+      ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      cancelled_at: null,
+      metadata: {
+        created_by: 'webhook_integration_test',
+        test_environment: true,
+        test_timestamp: uniqueTimestamp
+      }
+    }, { transaction });
+    
+    console.log(`✅ Test subscription created with ID: ${testSubscription.id}`);
+    console.log(`   📊 Subscription details: user_id=${testSubscription.user_id}, plan_id=${testSubscription.plan_id}`);
+    
+    // ===== VALIDATION FINALE AVEC ASSOCIATIONS =====
+    console.log('🔍 Validating created data and testing associations...');
+    
+    // Test des associations pour vérifier qu'elles fonctionnent
+    const subscriptionWithPlan = await UserSubscription.findByPk(testSubscription.id, {
+      include: [{
+        model: SubscriptionPlan,
+        as: 'plan'
+      }],
+      transaction
     });
     
-    console.log('✅ Isolated test data created successfully');
-    console.log(`   📋 Plan ID: ${testPlan.id} (${testPlan.name})`);
-    console.log(`   👤 User ID: ${testUser.id} (${testUser.email})`);
-    console.log(`   💳 Subscription ID: ${testSubscription.id} (${testSubscription.status})`);
+    if (!subscriptionWithPlan) {
+      throw new Error('Cannot find subscription after creation');
+    }
     
-    // Retourner toutes les données créées pour les tests
+    if (!subscriptionWithPlan.plan) {
+      throw new Error('Association UserSubscription -> SubscriptionPlan not working');
+    }
+    
+    console.log('✅ Association test passed: UserSubscription can include SubscriptionPlan');
+    console.log(`   📋 Associated plan: ${subscriptionWithPlan.plan.name}`);
+    
+    // Test de l'association inverse
+    const planWithSubscriptions = await SubscriptionPlan.findByPk(testPlan.id, {
+      include: [{
+        model: UserSubscription,
+        as: 'subscriptions'
+      }],
+      transaction
+    });
+    
+    if (!planWithSubscriptions || !planWithSubscriptions.subscriptions || planWithSubscriptions.subscriptions.length === 0) {
+      throw new Error('Association SubscriptionPlan -> UserSubscription not working');
+    }
+    
+    console.log('✅ Reverse association test passed: SubscriptionPlan can include UserSubscriptions');
+    console.log(`   💳 Associated subscriptions: ${planWithSubscriptions.subscriptions.length}`);
+    
+    // Validation des données
+    const validationUser = await User.findByPk(testUser.id, { transaction });
+    const validationPlan = await SubscriptionPlan.findByPk(testPlan.id, { transaction });
+    const validationSubscription = await UserSubscription.findByPk(testSubscription.id, { transaction });
+    
+    if (!validationUser || !validationPlan || !validationSubscription) {
+      throw new Error('Data validation failed: One or more records not properly created');
+    }
+    
+    console.log('✅ All data validation and association checks passed');
+    console.log(`   📊 User: ${validationUser.firstName} ${validationUser.lastName} (ID: ${validationUser.id})`);
+    console.log(`   📋 Plan: ${validationPlan.name} (ID: ${validationPlan.id})`);
+    console.log(`   💳 Subscription: ${validationSubscription.status} (user_id: ${validationSubscription.user_id}, plan_id: ${validationSubscription.plan_id})`);
+    
+    await transaction.commit();
+    console.log('✅ Transaction committed successfully with all associations working');
+    
     return {
       plan: testPlan,
       user: testUser,
       subscription: testSubscription,
       subscriptionId: testSubscription.id,
       stripeSubscriptionId: uniqueSubscriptionId,
-      stripeCustomerId: uniqueCustomerId
+      stripeCustomerId: uniqueCustomerId,
+      testMetadata: {
+        timestamp: uniqueTimestamp,
+        random: uniqueRandom
+      }
     };
     
   } catch (error) {
-    console.error('❌ Error creating isolated test data:', error.message);
+    await transaction.rollback();
+    console.error('❌ Error creating isolated test data (transaction rolled back):', error.message);
+    
+    // Diagnostic spécifique pour les erreurs d'association
+    if (error.message.includes('is not associated')) {
+      console.error('\n🔧 ASSOCIATION ERROR DIAGNOSTIC:');
+      console.error('This error indicates that Sequelize associations are not properly established.');
+      console.error('Make sure you are using require("../models") instead of importing models individually.');
+      console.error('The models/index.js file should handle all associations automatically.');
+    }
+    
+    if (error.name === 'SequelizeValidationError') {
+      console.error('📋 Sequelize validation errors:');
+      error.errors.forEach((validationError, index) => {
+        console.error(`   ${index + 1}. Field: ${validationError.path}`);
+        console.error(`      Message: ${validationError.message}`);
+        console.error(`      Value: ${validationError.value}`);
+      });
+    }
+    
     console.error('📋 Full error details:', error);
     throw error;
   }
 }
 
 /**
- * 🧹 Fonction de nettoyage des données de test
- * 
- * Cette fonction supprime toutes les données créées pendant les tests
- * pour laisser votre base de données dans un état propre.
+ * 🧹 Fonction de nettoyage améliorée
  */
 async function cleanupTestEnvironment() {
   console.log('🧹 Cleaning up test environment...');
   
+  const cleanupTransaction = await sequelize.transaction();
+  
   try {
-    // Supprimer dans l'ordre inverse des dépendances pour éviter les erreurs
-    // de contraintes de clé étrangère
-    
-    // 1. D'abord les paiements (qui référencent les abonnements)
-    await PaymentHistory.destroy({
+    // Supprimer dans l'ordre inverse des dépendances
+    const deletedPayments = await PaymentHistory.destroy({
       where: {
-        stripeEventId: {
+        stripe_event_id: {
           [sequelize.Sequelize.Op.like]: '%test%'
         }
-      }
+      },
+      transaction: cleanupTransaction
     });
     
-    // 2. Ensuite les abonnements (qui référencent les utilisateurs et plans)
-    await UserSubscription.destroy({
+    const deletedSubscriptions = await UserSubscription.destroy({
       where: {
-        stripeSubscriptionId: {
+        stripe_subscription_id: {
           [sequelize.Sequelize.Op.like]: '%test%'
         }
-      }
+      },
+      transaction: cleanupTransaction
     });
     
-    // 3. Puis les utilisateurs
-    await User.destroy({
+    const deletedUsers = await User.destroy({
       where: {
         email: {
           [sequelize.Sequelize.Op.like]: '%webhook.test%'
         }
-      }
+      },
+      transaction: cleanupTransaction
     });
     
-    // 4. Enfin les plans de test
-    await SubscriptionPlan.destroy({
+    const deletedPlans = await SubscriptionPlan.destroy({
       where: {
         name: {
           [sequelize.Sequelize.Op.like]: '%Test Plan%'
         }
-      }
+      },
+      transaction: cleanupTransaction
     });
     
-    console.log('✅ Test environment cleaned up successfully');
+    await cleanupTransaction.commit();
+    
+    console.log(`✅ Test environment cleaned up successfully:`);
+    console.log(`   - ${deletedPayments} payment records deleted`);
+    console.log(`   - ${deletedSubscriptions} subscription records deleted`);
+    console.log(`   - ${deletedUsers} user records deleted`);
+    console.log(`   - ${deletedPlans} plan records deleted`);
     
   } catch (error) {
-    console.error('❌ Cleanup error:', error.message);
-    // Important : ne pas faire échouer le test principal à cause 
-    // d'un problème de nettoyage
+    await cleanupTransaction.rollback();
+    console.error('❌ Cleanup error (transaction rolled back):', error.message);
   }
 }
 
 /**
  * 🚀 Suite de tests principale
- * 
- * Cette fonction orchestre tous les tests et gère le cycle de vie
- * des données de test (création -> tests -> nettoyage).
  */
 async function runWebhookTests() {
   console.log('\n==========================================');
   console.log('🧪 STARTING ISOLATED WEBHOOK TEST SUITE');
   console.log('==========================================');
-  console.log('🎯 Testing webhook integration without affecting development data');
-  console.log('🔒 Using isolated test environment with unique identifiers');
+  console.log('🎯 Testing webhook integration with proper Sequelize associations');
+  console.log('🔗 Using centralized model system with automatic association loading');
+  console.log('✅ UserSubscription ↔ SubscriptionPlan associations will be available');
   
   let testData = null;
   
   try {
-    // Phase 1 : Configuration de l'environnement de test
     console.log('\n⚙️ Setting up isolated webhook test environment...');
-    console.log(`🔗 Using isolated test database: ${process.env.DB_NAME}`);
+    console.log(`🔗 Database: ${process.env.DB_NAME}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📦 Models loaded from: ${require.resolve('../models')}`);
     
-    // Vérifier que nous sommes bien en mode test (optionnel mais recommandé)
-    if (!process.env.NODE_ENV || process.env.NODE_ENV !== 'test') {
-      console.log('⚠️ Warning: NODE_ENV is not set to "test"');
-      console.log('💡 Consider setting NODE_ENV=test for better isolation');
-    }
-    
-    console.log('📦 Isolated models imported');
-    console.log('🔧 Using isolated test database configuration');
-    
-    // Phase 2 : Création des données de test isolées
-    console.log('\n📋 Creating isolated test data...');
+    console.log('\n📋 Creating isolated test data with proper associations...');
     testData = await createIsolatedTestData();
-    console.log('✅ Test environment setup complete');
+    console.log('✅ Test environment setup complete with working associations');
     
-    // Phase 3 : Exécution de la suite de tests webhook
     console.log('\n🧪 Running webhook integration tests...');
     
     await testWebhookSecurity();
@@ -269,37 +337,48 @@ async function runWebhookTests() {
     await testRecurringPaymentSucceeded(testData);
     await testErrorHandling(testData);
     
-    // Phase 4 : Validation finale
     console.log('\n🎉 All webhook tests completed successfully!');
     console.log('==========================================');
-    console.log('✅ Complete isolation working perfectly');
-    console.log('✅ No conflicts with development data');
+    console.log('✅ Sequelize associations working correctly');
+    console.log('✅ UserSubscription ↔ SubscriptionPlan relationships established');
+    console.log('✅ Webhook processing can access related models');
+    console.log('✅ Foreign key relationships validated');
     console.log('✅ Webhook system production-ready');
     console.log('==========================================');
     
   } catch (error) {
     console.error('\n💥 ISOLATED WEBHOOK TEST FAILED:', error.message);
-    console.error('Stack trace:', error.stack);
+    console.error('📋 Error type:', error.constructor.name);
+    
+    if (error.message.includes('is not associated')) {
+      console.error('\n🔧 ASSOCIATION TROUBLESHOOTING:');
+      console.error('1. Verify that models/index.js is properly loading all models');
+      console.error('2. Check that associate functions are defined in each model');
+      console.error('3. Ensure the test uses require("../models") not individual imports');
+      console.error('4. Verify that association names match between models');
+    }
+    
+    if (error.name === 'SequelizeValidationError') {
+      console.error('📋 Sequelize validation errors:');
+      error.errors.forEach((validationError, index) => {
+        console.error(`   ${index + 1}. ${validationError.message}`);
+        console.error(`      Field: ${validationError.path}`);
+        console.error(`      Value: ${validationError.value}`);
+      });
+    }
+    
+    console.error('📋 Full stack trace:', error.stack);
     throw error;
     
   } finally {
-    // Phase 5 : Nettoyage garanti même en cas d'erreur
-    // Le bloc finally s'exécute TOUJOURS, même si le test échoue
     await cleanupTestEnvironment();
   }
 }
 
-/**
- * 🔐 Test 1: Validation de la sécurité des webhooks
- * 
- * Ce test vérifie que votre serveur rejette correctement les webhooks
- * malveillants ou mal formés. C'est crucial pour la sécurité !
- */
+// Tests individuels (inchangés)
 async function testWebhookSecurity() {
   console.log('\n🔐 Test 1: Security validation...');
   
-  // Test 1.1 : Webhook sans signature (doit être rejeté)
-  console.log('   🔍 Testing webhook without signature...');
   const responseNoSignature = await request(app)
     .post('/api/webhooks/stripe')
     .send({ test: 'data' });
@@ -309,8 +388,6 @@ async function testWebhookSecurity() {
   }
   console.log('   ✅ Correctly rejects webhooks without signature');
   
-  // Test 1.2 : Webhook avec signature invalide (doit être rejeté)
-  console.log('   🔍 Testing webhook with invalid signature...');
   const responseInvalidSignature = await request(app)
     .post('/api/webhooks/stripe')
     .set('stripe-signature', 'invalid_signature')
@@ -324,42 +401,37 @@ async function testWebhookSecurity() {
   console.log('✅ Security validation passed');
 }
 
-/**
- * 💳 Test 2: Traitement d'un paiement initial réussi
- * 
- * Ce test simule le webhook que Stripe envoie quand un paiement
- * initial réussit. Votre serveur doit activer l'abonnement.
- */
 async function testPaymentIntentSucceeded(testData) {
   console.log('\n💳 Test 2: Payment Intent Succeeded...');
+  console.log('   🔍 This test will verify that webhook processing can access associated models');
   
-  // Créer un événement Stripe simulé avec les bonnes métadonnées
-  // Les métadonnées permettent de lier l'événement Stripe à vos données
   const event = createTestStripeEvent('payment_intent.succeeded', {
-    amount: 999, // Correspond au prix de notre plan de test
+    amount: 999,
     currency: 'usd'
   }, {
     portall_subscription_id: testData.subscriptionId.toString()
   });
   
-  // Préparer la requête avec signature valide
   const payload = JSON.stringify(event);
   const signature = generateStripeSignature(payload, process.env.STRIPE_WEBHOOK_SECRET);
   
   console.log('   🔍 Sending payment_intent.succeeded webhook...');
+  console.log(`   📋 Subscription ID in metadata: ${testData.subscriptionId}`);
+  
   const response = await request(app)
     .post('/api/webhooks/stripe')
     .set('stripe-signature', signature)
     .set('content-type', 'application/json')
     .send(payload);
   
-  // Vérifier que le webhook a été accepté
   if (response.status !== 200) {
+    console.error(`   ❌ Webhook response status: ${response.status}`);
+    console.error(`   📋 Response body: ${response.text}`);
     throw new Error(`Payment intent webhook failed with status ${response.status}: ${response.text}`);
   }
-  console.log('   ✅ Webhook accepted by server');
+  console.log('   ✅ Webhook accepted by server (associations working!)');
   
-  // Vérifier que l'abonnement a été mis à jour en base de données
+  // Vérifier la mise à jour en base
   const updatedSubscription = await UserSubscription.findByPk(testData.subscriptionId);
   
   if (!updatedSubscription) {
@@ -371,19 +443,12 @@ async function testPaymentIntentSucceeded(testData) {
   }
   
   console.log('   ✅ Subscription correctly activated in database');
-  console.log('✅ Payment intent succeeded processed correctly');
+  console.log('✅ Payment intent succeeded processed correctly with associations');
 }
 
-/**
- * 🔄 Test 3: Traitement d'un paiement récurrent réussi
- * 
- * Ce test simule le webhook envoyé pour les paiements mensuels/annuels
- * automatiques. Il doit prolonger la période d'abonnement.
- */
 async function testRecurringPaymentSucceeded(testData) {
   console.log('\n🔄 Test 3: Recurring Payment Succeeded...');
   
-  // Créer un événement de facturation récurrente
   const event = createTestStripeEvent('invoice.payment_succeeded', {
     subscription: testData.stripeSubscriptionId,
     amount_paid: 999,
@@ -408,21 +473,12 @@ async function testRecurringPaymentSucceeded(testData) {
   console.log('✅ Recurring payment processed correctly');
 }
 
-/**
- * ❌ Test 4: Gestion gracieuse des erreurs
- * 
- * Ce test vérifie que votre serveur gère bien les webhooks qui ne
- * concernent pas votre application (webhooks d'autres événements).
- */
 async function testErrorHandling(testData) {
   console.log('\n❌ Test 4: Error handling...');
   
-  // Créer un événement valide mais sans métadonnées Portall
-  // Votre serveur doit l'accepter mais ne rien faire avec
   const invalidEvent = createTestStripeEvent('payment_intent.succeeded', {
     amount: 999,
     currency: 'usd'
-    // Pas de métadonnées portall_subscription_id
   });
   
   const payload = JSON.stringify(invalidEvent);
@@ -435,7 +491,6 @@ async function testErrorHandling(testData) {
     .set('content-type', 'application/json')
     .send(payload);
   
-  // Le serveur doit accepter le webhook (signature valide) même s'il ne fait rien avec
   if (response.status !== 200) {
     throw new Error(`Expected graceful handling, got status ${response.status}`);
   }
@@ -444,13 +499,13 @@ async function testErrorHandling(testData) {
   console.log('✅ Error handling working correctly');
 }
 
-// Point d'entrée principal du script
-// Cette partie s'exécute quand vous lancez le fichier directement
+// Point d'entrée principal
 if (require.main === module) {
   runWebhookTests()
     .then(() => {
       console.log('\n🏁 Isolated test suite completed successfully');
       console.log('🎯 Your webhook system is ready for production!');
+      console.log('✅ All Sequelize associations are working correctly');
       process.exit(0);
     })
     .catch((error) => {
@@ -460,5 +515,4 @@ if (require.main === module) {
     });
 }
 
-// Exporter la fonction principale pour utilisation dans d'autres tests
 module.exports = { runWebhookTests };

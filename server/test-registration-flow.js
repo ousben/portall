@@ -34,8 +34,8 @@ async function runCompleteAuthTest() {
     console.log('\n🔧 Configuration de l\'environnement de test intégré...');
     
     // Import de la configuration
-    const { sequelize } = require('../config/database.connection');
-    const models = require('../models');
+    const { sequelize } = require('./config/database.connection');
+    const models = require('./models');
     
     // Authentification à la base de données de test
     await sequelize.authenticate();
@@ -97,7 +97,7 @@ async function runCompleteAuthTest() {
     console.log('\n🚀 Initialisation de l\'application Express...');
     
     // Import de l'application Express (maintenant que la DB est prête)
-    app = require('../server');
+    app = require('./server');
     
     // Pause pour stabiliser les connexions
     await new Promise(resolve => setTimeout(resolve, 1500));

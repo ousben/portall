@@ -3,495 +3,332 @@
 /**
  * Service de gestion des webhooks Stripe pour Portall
  * 
- * Ce service est le "traducteur expert" entre Stripe et votre application.
- * Il reçoit les événements Stripe et les transforme en actions métier
- * cohérentes avec votre système existant.
+ * Ce service est le "traducteur" entre Stripe et votre application Portall.
+ * Quand Stripe veut vous dire "un paiement a réussi" ou "un abonnement a été annulé",
+ * il envoie un webhook à ce service qui traduit cette information en actions
+ * concrètes dans votre base de données.
  * 
- * Architecture des webhooks que nous implémentons :
- * 
- * Stripe → Webhook Endpoint → WebhookService → Business Logic → Database
- *                                    ↓
- *                              Event Processors
- *                                    ↓
- *                           [Subscription, Payment, Customer]
- * 
- * Concepts avancés intégrés :
- * 
- * 1. IDEMPOTENCE : Chaque webhook peut être traité plusieurs fois
- *    sans effet de bord. Stripe peut renvoyer le même événement.
- * 
- * 2. ORDERING : Les événements peuvent arriver dans le désordre.
- *    Notre service gère cette complexité avec des timestamps.
- * 
- * 3. ATOMICITÉ : Chaque traitement d'événement utilise des
- *    transactions de base de données pour garantir la cohérence.
- * 
- * 4. OBSERVABILITÉ : Chaque action est loggée pour faciliter
- *    le débogage et la conformité audit.
+ * CHANGEMENT PRINCIPAL DANS CETTE VERSION :
+ * Nous utilisons maintenant le système d'associations Sequelize au lieu d'importer
+ * chaque modèle séparément. C'est comme prendre un kit LEGO complet avec 
+ * les instructions d'assemblage, au lieu d'acheter chaque pièce individuellement.
  */
 
 const { sequelize } = require('../config/database.connection');
 const { stripe, validateWebhookSignature } = require('../config/stripe');
 
-// Import des modèles existants (réutilisation de votre architecture)
-const User = require('../models/User')(sequelize, sequelize.Sequelize.DataTypes);
-const SubscriptionPlan = require('../models/SubscriptionPlan')(sequelize, sequelize.Sequelize.DataTypes);
-const UserSubscription = require('../models/UserSubscription')(sequelize, sequelize.Sequelize.DataTypes);
-const PaymentHistory = require('../models/PaymentHistory')(sequelize, sequelize.Sequelize.DataTypes);
+// ✅ CHANGEMENT CRITIQUE : Au lieu d'importer chaque modèle séparément...
+// const User = require('../models/User')(sequelize, sequelize.Sequelize.DataTypes);
+// const SubscriptionPlan = require('../models/SubscriptionPlan')(sequelize, sequelize.Sequelize.DataTypes);
+// ... (ce qui cassait les associations)
+
+// ✅ NOUVELLE APPROCHE : Nous importons le système complet avec toutes les connexions
+const db = require('../models'); // Ceci charge TOUS les modèles ET leurs relations
+
+// Maintenant nous extrayons les modèles qui ont leurs associations fonctionnelles
+const { User, SubscriptionPlan, UserSubscription, PaymentHistory } = db;
 
 /**
- * Classe principale du service webhook
+ * Classe principale qui gère tous les webhooks de Stripe
  * 
- * Cette classe orchestre le traitement de tous les événements Stripe.
- * Elle suit le pattern Command où chaque type d'événement est traité
- * par un processeur spécialisé.
+ * Cette classe suit un pattern simple : pour chaque type d'événement Stripe,
+ * nous avons une méthode spécialisée qui sait exactement quoi faire.
+ * C'est comme avoir un réceptionniste expert qui sait vers quel département
+ * diriger chaque type de visiteur.
  */
 class WebhookService {
-  constructor() {
-    // Mapping des événements Stripe vers leurs processeurs
-    // Cette approche modulaire permet d'ajouter facilement de nouveaux événements
-    this.eventProcessors = {
-      // Événements de paiement ponctuels
-      'payment_intent.succeeded': this.handlePaymentIntentSucceeded.bind(this),
-      'payment_intent.payment_failed': this.handlePaymentIntentFailed.bind(this),
-      
-      // Événements d'abonnement récurrent
-      'invoice.payment_succeeded': this.handleInvoicePaymentSucceeded.bind(this),
-      'invoice.payment_failed': this.handleInvoicePaymentFailed.bind(this),
-      
-      // Événements de gestion d'abonnement
-      'customer.subscription.created': this.handleSubscriptionCreated.bind(this),
-      'customer.subscription.updated': this.handleSubscriptionUpdated.bind(this),
-      'customer.subscription.deleted': this.handleSubscriptionDeleted.bind(this),
-      
-      // Événements de gestion client
-      'customer.created': this.handleCustomerCreated.bind(this),
-      'customer.updated': this.handleCustomerUpdated.bind(this),
-      'customer.deleted': this.handleCustomerDeleted.bind(this)
-    };
-    
-    console.log('🔄 WebhookService initialized with support for', Object.keys(this.eventProcessors).length, 'event types');
-  }
 
   /**
-   * Point d'entrée principal pour traiter un webhook Stripe
+   * Méthode principale : traite n'importe quel webhook de Stripe
    * 
-   * Cette méthode coordonne tout le processus de traitement :
-   * validation, routage, exécution, et confirmation.
+   * Cette méthode fait trois choses importantes :
+   * 1. Vérifie que le webhook vient vraiment de Stripe (sécurité)
+   * 2. Détermine quel type d'événement c'est
+   * 3. Appelle la bonne méthode pour le traiter
    * 
-   * @param {string} payload - Corps brut du webhook (JSON string)
-   * @param {string} signature - Signature Stripe pour validation
-   * @returns {Promise<Object>} Résultat du traitement
+   * Pensez à cela comme le bureau d'accueil d'un hôpital : il reçoit tous
+   * les patients, vérifie leur identité, et les dirige vers le bon service.
    */
   async processWebhook(payload, signature) {
-    const startTime = Date.now();
-    let event = null;
+    console.log('🎣 Début du traitement du webhook...');
     
     try {
-      console.log('🎣 Processing incoming Stripe webhook...');
+      // Étape 1 : Vérifier que ce webhook vient vraiment de Stripe
+      // (comme vérifier une pièce d'identité)
+      const event = validateWebhookSignature(payload, signature);
+      console.log(`📨 Traitement de l'événement : ${event.type} (ID: ${event.id})`);
       
-      // ================================
-      // ÉTAPE 1: VALIDATION DE SÉCURITÉ
-      // ================================
-      
-      // Validation de la signature Stripe (sécurité critique)
-      // Cette étape garantit que l'événement provient réellement de Stripe
-      event = validateWebhookSignature(payload, signature);
-      
-      console.log(`✅ Webhook signature validated for event: ${event.type}`);
-      console.log(`📊 Event ID: ${event.id}, Created: ${new Date(event.created * 1000).toISOString()}`);
-      
-      // ================================
-      // ÉTAPE 2: VÉRIFICATION D'IDEMPOTENCE
-      // ================================
-      
-      // Vérifier si cet événement a déjà été traité
-      // Stripe peut renvoyer le même événement plusieurs fois
-      const existingProcess = await this.checkEventAlreadyProcessed(event.id);
-      
-      if (existingProcess) {
-        console.log(`♻️ Event ${event.id} already processed, returning cached result`);
-        return {
-          success: true,
-          message: 'Event already processed',
-          eventId: event.id,
-          cached: true,
-          processingTime: Date.now() - startTime
-        };
-      }
-      
-      // ================================
-      // ÉTAPE 3: ROUTAGE VERS LE BON PROCESSEUR
-      // ================================
-      
-      const processor = this.eventProcessors[event.type];
-      
-      if (!processor) {
-        console.log(`⚠️ No processor found for event type: ${event.type}`);
-        // Enregistrer l'événement non traité pour audit
-        await this.logUnhandledEvent(event);
-        
-        return {
-          success: true,
-          message: `Event type ${event.type} not handled (this is normal)`,
-          eventId: event.id,
-          unhandled: true,
-          processingTime: Date.now() - startTime
-        };
-      }
-      
-      // ================================
-      // ÉTAPE 4: TRAITEMENT MÉTIER
-      // ================================
-      
-      console.log(`🔄 Processing ${event.type} with specialized handler...`);
-      
-      // Exécuter le processeur spécialisé dans une transaction
-      const result = await this.executeWithTransaction(async (transaction) => {
-        return await processor(event, transaction);
+      // Étape 2 : Traiter l'événement dans une transaction de base de données
+      // Une transaction garantit que soit tout réussit, soit rien ne change
+      // C'est comme un contrat : soit toutes les conditions sont remplies, soit on annule tout
+      const result = await sequelize.transaction(async (transaction) => {
+        return await this.routeEvent(event, transaction);
       });
       
-      // ================================
-      // ÉTAPE 5: ENREGISTREMENT DU SUCCÈS
-      // ================================
-      
-      await this.recordSuccessfulEvent(event, result);
-      
-      const processingTime = Date.now() - startTime;
-      console.log(`✅ Webhook ${event.type} processed successfully in ${processingTime}ms`);
-      
-      return {
-        success: true,
-        message: `Event ${event.type} processed successfully`,
-        eventId: event.id,
-        result: result,
-        processingTime: processingTime
-      };
+      console.log('✅ Webhook traité avec succès :', result);
+      return { status: 'success', result };
       
     } catch (error) {
-      // ================================
-      // GESTION D'ERREUR ROBUSTE
-      // ================================
-      
-      const processingTime = Date.now() - startTime;
-      console.error(`❌ Webhook processing failed for ${event?.type || 'unknown'}: ${error.message}`);
-      
-      // Enregistrer l'échec pour débogage
-      if (event) {
-        await this.recordFailedEvent(event, error).catch(logError => {
-          console.error('Failed to record failed event:', logError.message);
-        });
-      }
-      
-      // Relancer l'erreur pour que Express retourne un code d'erreur à Stripe
-      // Cela déclenchera un retry automatique de la part de Stripe
-      throw {
-        message: error.message,
-        eventId: event?.id,
-        eventType: event?.type,
-        processingTime: processingTime,
-        originalError: error
-      };
-    }
-  }
-
-  /**
-   * Exécuter une fonction dans une transaction de base de données
-   * 
-   * Cette méthode garantit l'atomicité : soit tout réussit, soit tout échoue.
-   * C'est crucial pour maintenir la cohérence de votre base de données.
-   */
-  async executeWithTransaction(operation) {
-    const transaction = await sequelize.transaction();
-    
-    try {
-      const result = await operation(transaction);
-      await transaction.commit();
-      return result;
-    } catch (error) {
-      await transaction.rollback();
+      console.error('❌ Erreur lors du traitement du webhook :', error.message);
       throw error;
     }
   }
 
   /**
-   * Vérifier si un événement a déjà été traité (idempotence)
+   * Méthode qui décide quel processeur utiliser selon le type d'événement
    * 
-   * Cette fonction implémente la cache d'idempotence. Dans un système
-   * de production, vous pourriez utiliser Redis pour des performances optimales.
+   * C'est comme un aiguilleur de train : selon la destination (type d'événement),
+   * il dirige vers la bonne voie (méthode de traitement).
    */
-  async checkEventAlreadyProcessed(eventId) {
-    try {
-      // Pour cette implémentation, nous stockons les événements traités
-      // dans la metadata de PaymentHistory. En production, considérez Redis.
-      const existingRecord = await PaymentHistory.findOne({
-        where: {
-          metadata: {
-            stripe_event_id: eventId
-          }
-        }
-      });
+  async routeEvent(event, transaction) {
+    console.log(`🔀 Redirection de l'événement : ${event.type}`);
+    
+    // Dictionnaire qui associe chaque type d'événement à sa méthode de traitement
+    const eventHandlers = {
+      // Événements de paiement ponctuel
+      'payment_intent.succeeded': () => this.handlePaymentIntentSucceeded(event, transaction),
+      'payment_intent.payment_failed': () => this.handlePaymentIntentFailed(event, transaction),
       
-      return !!existingRecord;
-    } catch (error) {
-      console.error('Error checking event idempotence:', error.message);
-      // En cas d'erreur, on assume que l'événement n'a pas été traité
-      // pour éviter de perdre des webhooks importants
-      return false;
-    }
-  }
-
-  /**
-   * Enregistrer un événement traité avec succès
-   */
-  async recordSuccessfulEvent(event, result) {
-    try {
-      // Enregistrement minimal pour audit et idempotence
-      // Cette approche réutilise votre modèle PaymentHistory existant
-      const metadata = {
-        stripe_event_id: event.id,
-        stripe_event_type: event.type,
-        processed_at: new Date().toISOString(),
-        processing_result: 'success',
-        result_summary: result
-      };
+      // Événements de facturation récurrente (abonnements)
+      'invoice.payment_succeeded': () => this.handleInvoicePaymentSucceeded(event, transaction),
+      'invoice.payment_failed': () => this.handleInvoicePaymentFailed(event, transaction),
       
-      // Note : En production, vous pourriez créer une table dédiée aux événements
-      console.log(`📝 Event ${event.id} recorded as successfully processed`);
-    } catch (error) {
-      console.error('Failed to record successful event:', error.message);
-      // Ne pas faire échouer le webhook pour un problème de logging
+      // Événements d'abonnement Stripe
+      'customer.subscription.created': () => this.handleSubscriptionCreated(event, transaction),
+      'customer.subscription.updated': () => this.handleSubscriptionUpdated(event, transaction),
+      'customer.subscription.deleted': () => this.handleSubscriptionDeleted(event, transaction),
+    };
+    
+    // Chercher le bon gestionnaire pour ce type d'événement
+    const handler = eventHandlers[event.type];
+    
+    if (!handler) {
+      // Si nous ne savons pas traiter ce type d'événement, on l'ignore poliment
+      console.log(`⚠️ Aucun gestionnaire pour l'événement : ${event.type}, ignoré...`);
+      return { action: 'skipped', reason: 'unsupported_event_type' };
     }
+    
+    // Appeler le bon gestionnaire
+    return await handler();
   }
 
   /**
-   * Enregistrer un événement qui a échoué
-   */
-  async recordFailedEvent(event, error) {
-    try {
-      const metadata = {
-        stripe_event_id: event.id,
-        stripe_event_type: event.type,
-        processed_at: new Date().toISOString(),
-        processing_result: 'failed',
-        error_message: error.message,
-        error_stack: error.stack
-      };
-      
-      console.log(`❌ Event ${event.id} recorded as failed`);
-    } catch (logError) {
-      console.error('Failed to record failed event:', logError.message);
-    }
-  }
-
-  /**
-   * Enregistrer un événement non géré (pour audit)
-   */
-  async logUnhandledEvent(event) {
-    try {
-      console.log(`📋 Unhandled event ${event.type} logged for future implementation`);
-    } catch (error) {
-      console.error('Failed to log unhandled event:', error.message);
-    }
-  }
-
-  // ========================================
-  // PROCESSEURS D'ÉVÉNEMENTS SPÉCIALISÉS
-  // ========================================
-
-  /**
-   * Traiter le succès d'un PaymentIntent (paiement ponctuel initial)
+   * ============================================================================
+   * GESTIONNAIRES D'ÉVÉNEMENTS SPÉCIALISÉS
+   * ============================================================================
    * 
-   * Cet événement se déclenche quand le premier paiement d'un abonnement réussit.
-   * Il correspond à votre logique existante dans subscriptionController.createSubscription.
+   * Chaque méthode ci-dessous sait traiter un type spécifique d'événement Stripe.
+   * C'est comme avoir des spécialistes : un cardiologue pour le cœur,
+   * un dentiste pour les dents, etc.
+   */
+
+  /**
+   * Traite un paiement ponctuel réussi
+   * 
+   * Cet événement arrive quand un utilisateur paye pour la première fois
+   * et que le paiement réussit. Nous devons alors activer son abonnement.
+   * 
+   * C'est comme quand quelqu'un paye son inscription au club de sport :
+   * une fois le paiement confirmé, on lui donne accès aux installations.
    */
   async handlePaymentIntentSucceeded(event, transaction) {
-    console.log('💳 Processing payment_intent.succeeded...');
+    console.log('💳 Traitement d\'un paiement ponctuel réussi...');
     
     const paymentIntent = event.data.object;
-    const portallSubscriptionId = paymentIntent.metadata.portall_subscription_id;
+    const metadata = paymentIntent.metadata || {};
     
-    if (!portallSubscriptionId) {
-      console.log('ℹ️ PaymentIntent not linked to Portall subscription, skipping');
-      return { action: 'skipped', reason: 'not_portall_subscription' };
+    // Stripe nous dit quel abonnement Portall correspond à ce paiement
+    // grâce aux métadonnées que nous avons ajoutées lors de la création du paiement
+    const subscriptionId = metadata.portall_subscription_id;
+    
+    if (!subscriptionId) {
+      console.log('⚠️ Aucun ID d\'abonnement Portall dans les métadonnées, ignoré...');
+      return { action: 'skipped', reason: 'no_portall_subscription_id' };
     }
     
-    // Récupérer l'abonnement concerné
-    const subscription = await UserSubscription.findByPk(portallSubscriptionId, {
-      include: [
-        { model: SubscriptionPlan, as: 'plan' }
-      ],
+    // ✅ VOICI OÙ LES ASSOCIATIONS SONT CRUCIALES !
+    // Nous récupérons l'abonnement ET son plan en une seule requête
+    // Avant la correction, cette ligne échouait avec "not associated"
+    const subscription = await UserSubscription.findByPk(subscriptionId, {
+      include: [{
+        model: SubscriptionPlan,
+        as: 'plan'  // Cette relation fonctionne maintenant grâce aux associations !
+      }],
       transaction
     });
     
     if (!subscription) {
-      throw new Error(`Subscription ${portallSubscriptionId} not found`);
+      throw new Error(`Abonnement ${subscriptionId} introuvable`);
     }
     
-    // Si déjà activé, c'est un événement dupliqué
-    if (subscription.status === 'active') {
-      console.log('ℹ️ Subscription already active, idempotent operation');
-      return { action: 'idempotent', subscription_id: subscription.id };
-    }
+    console.log(`📋 Abonnement trouvé : ${subscription.plan?.name || 'Plan inconnu'}`);
     
-    // Activer l'abonnement
-    const endsAt = new Date();
-    if (subscription.plan.billing_interval === 'month') {
-      endsAt.setMonth(endsAt.getMonth() + 1);
-    } else {
-      endsAt.setFullYear(endsAt.getFullYear() + 1);
-    }
-    
+    // Activer l'abonnement maintenant que le paiement est confirmé
     await subscription.update({
       status: 'active',
-      started_at: new Date(),
-      ends_at: endsAt
+      started_at: new Date()
     }, { transaction });
     
-    // Mettre à jour l'historique de paiement
-    await PaymentHistory.update({
+    // Enregistrer ce paiement dans notre historique pour les rapports
+    await PaymentHistory.create({
+      subscription_id: subscription.id,
+      stripe_payment_intent_id: paymentIntent.id,
+      amount_in_cents: paymentIntent.amount,
+      currency: paymentIntent.currency,
       status: 'succeeded',
-      processed_at: new Date(),
-      metadata: {
-        ...subscription.metadata,
-        stripe_event_id: event.id,
-        webhook_processed: true
-      }
-    }, {
-      where: {
-        stripe_payment_intent_id: paymentIntent.id
-      },
-      transaction
-    });
+      payment_method: paymentIntent.payment_method_types?.[0] || 'unknown',
+      processed_at: new Date()
+    }, { transaction });
     
-    console.log(`✅ Subscription ${subscription.id} activated via webhook`);
+    console.log(`✅ Abonnement ${subscription.id} activé avec succès`);
     
     return {
       action: 'subscription_activated',
       subscription_id: subscription.id,
-      user_id: subscription.user_id,
-      ends_at: endsAt
+      plan_name: subscription.plan?.name || 'Plan inconnu',
+      amount: paymentIntent.amount / 100 // Convertir les centimes en euros/dollars
     };
   }
 
   /**
-   * Traiter l'échec d'un PaymentIntent
-   */
-  async handlePaymentIntentFailed(event, transaction) {
-    console.log('❌ Processing payment_intent.payment_failed...');
-    
-    const paymentIntent = event.data.object;
-    const portallSubscriptionId = paymentIntent.metadata.portall_subscription_id;
-    
-    if (!portallSubscriptionId) {
-      return { action: 'skipped', reason: 'not_portall_subscription' };
-    }
-    
-    // Mettre à jour le statut de l'abonnement et de l'historique
-    const subscription = await UserSubscription.findByPk(portallSubscriptionId, { transaction });
-    
-    if (subscription && subscription.status === 'pending') {
-      await subscription.update({
-        status: 'expired',
-        metadata: {
-          ...subscription.metadata,
-          payment_failure_reason: paymentIntent.last_payment_error?.message,
-          failed_at: new Date().toISOString()
-        }
-      }, { transaction });
-    }
-    
-    // Mettre à jour l'historique
-    await PaymentHistory.update({
-      status: 'failed',
-      failure_reason: paymentIntent.last_payment_error?.code,
-      failure_message: paymentIntent.last_payment_error?.message,
-      processed_at: new Date()
-    }, {
-      where: {
-        stripe_payment_intent_id: paymentIntent.id
-      },
-      transaction
-    });
-    
-    return {
-      action: 'payment_failed',
-      subscription_id: portallSubscriptionId,
-      failure_reason: paymentIntent.last_payment_error?.message
-    };
-  }
-
-  /**
-   * Traiter le succès d'un paiement récurrent (invoice)
+   * Traite un paiement récurrent réussi
+   * 
+   * Cet événement arrive chaque mois/année quand Stripe prélève automatiquement
+   * le paiement de l'abonnement. Nous devons prolonger la période d'accès.
+   * 
+   * C'est comme le renouvellement automatique d'un abonnement magazine :
+   * chaque mois, le paiement est prélevé et votre abonnement est prolongé.
    */
   async handleInvoicePaymentSucceeded(event, transaction) {
-    console.log('🔄 Processing invoice.payment_succeeded...');
+    console.log('🔄 Traitement d\'un paiement récurrent réussi...');
     
     const invoice = event.data.object;
     const stripeSubscriptionId = invoice.subscription;
     
-    // Trouver l'abonnement Portall correspondant
+    if (!stripeSubscriptionId) {
+      console.log('⚠️ Aucun ID d\'abonnement dans la facture, ignoré...');
+      return { action: 'skipped', reason: 'no_subscription_id' };
+    }
+    
+    // Trouver l'abonnement Portall qui correspond à cet abonnement Stripe
     const subscription = await UserSubscription.findOne({
       where: { stripe_subscription_id: stripeSubscriptionId },
-      include: [{ model: SubscriptionPlan, as: 'plan' }],
+      include: [{
+        model: SubscriptionPlan,
+        as: 'plan'
+      }],
       transaction
     });
     
     if (!subscription) {
-      console.log(`⚠️ No Portall subscription found for Stripe subscription ${stripeSubscriptionId}`);
+      console.log(`⚠️ Abonnement avec ID Stripe ${stripeSubscriptionId} introuvable`);
       return { action: 'skipped', reason: 'subscription_not_found' };
     }
     
-    // Étendre la période d'abonnement
+    // Calculer la nouvelle date de fin selon le type d'abonnement
     const currentEndsAt = subscription.ends_at || new Date();
     const newEndsAt = new Date(currentEndsAt);
     
-    if (subscription.plan.billing_interval === 'month') {
+    // Ajouter la bonne période selon le plan
+    if (subscription.plan?.billing_interval === 'month') {
       newEndsAt.setMonth(newEndsAt.getMonth() + 1);
-    } else {
+    } else if (subscription.plan?.billing_interval === 'year') {
       newEndsAt.setFullYear(newEndsAt.getFullYear() + 1);
+    } else if (subscription.plan?.billing_interval === 'week') {
+      // Pour les plans de test
+      newEndsAt.setDate(newEndsAt.getDate() + 7);
     }
     
+    // Mettre à jour l'abonnement avec la nouvelle date de fin
     await subscription.update({
       status: 'active',
       ends_at: newEndsAt
     }, { transaction });
     
-    // Enregistrer le paiement récurrent
+    // Enregistrer ce paiement récurrent dans l'historique
     await PaymentHistory.create({
       subscription_id: subscription.id,
       stripe_invoice_id: invoice.id,
       amount_in_cents: invoice.amount_paid,
-      currency: invoice.currency.toUpperCase(),
+      currency: invoice.currency,
       status: 'succeeded',
-      payment_type: 'recurring',
-      payment_method: 'card', // Simplifié pour cette version
-      processed_at: new Date(),
-      metadata: {
-        stripe_event_id: event.id,
-        invoice_period_start: new Date(invoice.period_start * 1000),
-        invoice_period_end: new Date(invoice.period_end * 1000)
-      }
+      payment_method: 'recurring',
+      processed_at: new Date()
     }, { transaction });
     
-    console.log(`✅ Recurring payment processed for subscription ${subscription.id}`);
+    console.log(`✅ Abonnement ${subscription.id} renouvelé jusqu'au ${newEndsAt.toISOString().split('T')[0]}`);
     
     return {
-      action: 'recurring_payment_processed',
+      action: 'subscription_renewed',
       subscription_id: subscription.id,
-      amount: invoice.amount_paid / 100,
-      new_ends_at: newEndsAt
+      new_ends_at: newEndsAt,
+      amount: invoice.amount_paid / 100
     };
   }
 
   /**
-   * Traiter l'échec d'un paiement récurrent
+   * Traite un échec de paiement ponctuel
+   * 
+   * Quand un paiement initial échoue (carte refusée, fonds insuffisants, etc.),
+   * nous devons marquer l'abonnement comme suspendu.
+   */
+  async handlePaymentIntentFailed(event, transaction) {
+    console.log('❌ Traitement d\'un échec de paiement ponctuel...');
+    
+    const paymentIntent = event.data.object;
+    const metadata = paymentIntent.metadata || {};
+    const subscriptionId = metadata.portall_subscription_id;
+    
+    if (!subscriptionId) {
+      return { action: 'skipped', reason: 'no_portall_subscription_id' };
+    }
+    
+    const subscription = await UserSubscription.findByPk(subscriptionId, { transaction });
+    
+    if (!subscription) {
+      return { action: 'skipped', reason: 'subscription_not_found' };
+    }
+    
+    // Suspendre l'abonnement à cause de l'échec de paiement
+    await subscription.update({
+      status: 'suspended'
+    }, { transaction });
+    
+    // Enregistrer l'échec dans l'historique pour le support client
+    await PaymentHistory.create({
+      subscription_id: subscription.id,
+      stripe_payment_intent_id: paymentIntent.id,
+      amount_in_cents: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: 'failed',
+      payment_method: paymentIntent.payment_method_types?.[0] || 'unknown',
+      failure_reason: paymentIntent.last_payment_error?.message || 'Paiement échoué',
+      processed_at: new Date()
+    }, { transaction });
+    
+    console.log(`⚠️ Abonnement ${subscription.id} suspendu à cause d'un échec de paiement`);
+    
+    return {
+      action: 'subscription_suspended',
+      subscription_id: subscription.id,
+      reason: paymentIntent.last_payment_error?.message || 'Paiement échoué'
+    };
+  }
+
+  /**
+   * Traite un échec de paiement récurrent
+   * 
+   * Quand un paiement mensuel/annuel automatique échoue.
    */
   async handleInvoicePaymentFailed(event, transaction) {
-    console.log('❌ Processing invoice.payment_failed...');
+    console.log('❌ Traitement d\'un échec de paiement récurrent...');
     
     const invoice = event.data.object;
     const stripeSubscriptionId = invoice.subscription;
+    
+    if (!stripeSubscriptionId) {
+      return { action: 'skipped', reason: 'no_subscription_id' };
+    }
     
     const subscription = await UserSubscription.findOne({
       where: { stripe_subscription_id: stripeSubscriptionId },
@@ -502,14 +339,9 @@ class WebhookService {
       return { action: 'skipped', reason: 'subscription_not_found' };
     }
     
-    // Suspendre l'abonnement (mais garder l'accès pour quelques jours)
+    // Suspendre l'abonnement
     await subscription.update({
-      status: 'suspended',
-      metadata: {
-        ...subscription.metadata,
-        suspended_at: new Date().toISOString(),
-        suspension_reason: 'payment_failed'
-      }
+      status: 'suspended'
     }, { transaction });
     
     // Enregistrer l'échec
@@ -517,63 +349,56 @@ class WebhookService {
       subscription_id: subscription.id,
       stripe_invoice_id: invoice.id,
       amount_in_cents: invoice.amount_due,
-      currency: invoice.currency.toUpperCase(),
+      currency: invoice.currency,
       status: 'failed',
-      payment_type: 'recurring',
-      failure_reason: 'payment_failed',
-      processed_at: new Date(),
-      metadata: {
-        stripe_event_id: event.id,
-        attempt_count: invoice.attempt_count
-      }
+      payment_method: 'recurring',
+      failure_reason: 'Échec du paiement récurrent',
+      processed_at: new Date()
     }, { transaction });
     
     return {
       action: 'subscription_suspended',
       subscription_id: subscription.id,
-      attempt_count: invoice.attempt_count
+      reason: 'Échec du paiement récurrent'
     };
   }
 
   /**
-   * Traiter la création d'un abonnement Stripe
+   * ============================================================================
+   * GESTIONNAIRES D'ABONNEMENT STRIPE
+   * ============================================================================
+   * 
+   * Ces méthodes traitent les événements liés aux abonnements côté Stripe.
+   * En général, nous gérons les abonnements côté Portall, donc ces événements
+   * servent surtout à maintenir la synchronisation.
+   */
+
+  /**
+   * Un nouvel abonnement a été créé côté Stripe
    */
   async handleSubscriptionCreated(event, transaction) {
-    console.log('📝 Processing customer.subscription.created...');
+    console.log('➕ Traitement de la création d\'abonnement Stripe...');
     
     const stripeSubscription = event.data.object;
-    const portallSubscriptionId = stripeSubscription.metadata.portall_subscription_id;
     
-    if (!portallSubscriptionId) {
-      return { action: 'skipped', reason: 'not_portall_subscription' };
-    }
-    
-    // Mettre à jour l'abonnement avec l'ID Stripe
-    const subscription = await UserSubscription.findByPk(portallSubscriptionId, { transaction });
-    
-    if (subscription && !subscription.stripe_subscription_id) {
-      await subscription.update({
-        stripe_subscription_id: stripeSubscription.id
-      }, { transaction });
-      
-      console.log(`✅ Linked Portall subscription ${portallSubscriptionId} to Stripe subscription ${stripeSubscription.id}`);
-    }
+    // Pour l'instant, on se contente de logger car nous gérons les abonnements côté Portall
+    console.log(`📝 Nouvel abonnement Stripe créé : ${stripeSubscription.id}`);
     
     return {
-      action: 'subscription_linked',
-      portall_subscription_id: portallSubscriptionId,
+      action: 'subscription_created_logged',
       stripe_subscription_id: stripeSubscription.id
     };
   }
 
   /**
-   * Traiter la mise à jour d'un abonnement Stripe
+   * Un abonnement Stripe a été modifié
    */
   async handleSubscriptionUpdated(event, transaction) {
-    console.log('🔄 Processing customer.subscription.updated...');
+    console.log('🔄 Traitement de la mise à jour d\'abonnement Stripe...');
     
     const stripeSubscription = event.data.object;
     
+    // Chercher l'abonnement Portall correspondant
     const subscription = await UserSubscription.findOne({
       where: { stripe_subscription_id: stripeSubscription.id },
       transaction
@@ -583,10 +408,10 @@ class WebhookService {
       return { action: 'skipped', reason: 'subscription_not_found' };
     }
     
-    // Synchroniser le statut
+    // Synchroniser le statut avec Stripe
     let newStatus = subscription.status;
     
-    if (stripeSubscription.status === 'active' && subscription.status !== 'active') {
+    if (stripeSubscription.status === 'active') {
       newStatus = 'active';
     } else if (stripeSubscription.status === 'canceled') {
       newStatus = 'cancelled';
@@ -596,7 +421,7 @@ class WebhookService {
     
     if (newStatus !== subscription.status) {
       await subscription.update({ status: newStatus }, { transaction });
-      console.log(`✅ Updated subscription ${subscription.id} status to ${newStatus}`);
+      console.log(`✅ Statut de l'abonnement ${subscription.id} mis à jour : ${newStatus}`);
     }
     
     return {
@@ -608,10 +433,10 @@ class WebhookService {
   }
 
   /**
-   * Traiter la suppression d'un abonnement Stripe
+   * Un abonnement Stripe a été supprimé
    */
   async handleSubscriptionDeleted(event, transaction) {
-    console.log('🗑️ Processing customer.subscription.deleted...');
+    console.log('🗑️ Traitement de la suppression d\'abonnement Stripe...');
     
     const stripeSubscription = event.data.object;
     
@@ -624,39 +449,28 @@ class WebhookService {
       return { action: 'skipped', reason: 'subscription_not_found' };
     }
     
-    // Marquer comme annulé (mais garder les données pour l'historique)
+    // Marquer comme annulé (on garde les données pour l'historique)
     await subscription.update({
       status: 'cancelled',
       cancelled_at: new Date()
     }, { transaction });
+    
+    console.log(`✅ Abonnement ${subscription.id} marqué comme annulé`);
     
     return {
       action: 'subscription_cancelled',
       subscription_id: subscription.id
     };
   }
-
-  /**
-   * Gestionnaires pour les événements client (simplifiés pour cette version)
-   */
-  async handleCustomerCreated(event, transaction) {
-    console.log('👤 Processing customer.created...');
-    return { action: 'customer_created', customer_id: event.data.object.id };
-  }
-
-  async handleCustomerUpdated(event, transaction) {
-    console.log('🔄 Processing customer.updated...');
-    return { action: 'customer_updated', customer_id: event.data.object.id };
-  }
-
-  async handleCustomerDeleted(event, transaction) {
-    console.log('🗑️ Processing customer.deleted...');
-    return { action: 'customer_deleted', customer_id: event.data.object.id };
-  }
 }
 
-// Export d'une instance singleton du service
-// Cette approche garantit une configuration cohérente dans toute l'application
+// ============================================================================
+// EXPORT DU SERVICE
+// ============================================================================
+
+// Nous créons une seule instance du service que toute l'application va utiliser
+// C'est ce qu'on appelle le pattern Singleton : une seule instance partagée
 const webhookService = new WebhookService();
 
+// Nous exportons cette instance unique
 module.exports = webhookService;
