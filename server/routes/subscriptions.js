@@ -21,7 +21,7 @@ const express = require('express');
 const router = express.Router();
 
 // Import des middleware de sécurité et validation
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { validateSubscriptionData } = require('../middleware/subscriptionValidation');
 const rateLimit = require('express-rate-limit');
 
@@ -91,7 +91,7 @@ router.get('/plans',
  */
 router.post('/create',
   writeRateLimit,
-  authenticateToken, // L'utilisateur doit être connecté
+  authenticate, // L'utilisateur doit être connecté
   validateSubscriptionData.createSubscription, // Validation des données
   subscriptionController.createSubscription
 );
@@ -105,7 +105,7 @@ router.post('/create',
  */
 router.get('/my-subscription',
   readRateLimit,
-  authenticateToken,
+  authenticate,
   subscriptionController.getMySubscription
 );
 
@@ -118,7 +118,7 @@ router.get('/my-subscription',
  */
 router.post('/cancel',
   writeRateLimit,
-  authenticateToken,
+  authenticate,
   validateSubscriptionData.cancelSubscription, // Validation optionnelle
   subscriptionController.cancelSubscription
 );
