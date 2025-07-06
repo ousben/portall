@@ -1,8 +1,8 @@
 // portall/server/controllers/authController.js
 
-const { User, PlayerProfile, CoachProfile, NJCAACollege, NCAACollege } = require('../models');
+const { User, PlayerProfile, CoachProfile, NJCAACoachProfile, NJCAACollege, NCAACollege } = require('../models');
 const AuthService = require('../services/authService');
-const emailService = require('../services/emailService'); // NOUVEAU: Service d'emails intégré
+const emailService = require('../services/emailService');
 const { sequelize } = require('../config/database.connection');
 const { Op } = require('sequelize');
 
@@ -103,7 +103,7 @@ class AuthController {
         isEmailVerified: false
       }, { transaction });
 
-      console.log(`✅ Base user created: ${newUser.email} (ID: ${newUser.id})`);
+      console.log(`✅ Base user created: ${newUser.email} (ID: ${newUser.id}, Type: ${userType})`);
 
       // ========================
       // ÉTAPE 4 : CRÉATION DU PROFIL SPÉCIALISÉ
@@ -115,6 +115,8 @@ class AuthController {
         profile = await AuthController.createPlayerProfile(newUser.id, profileData, transaction);
       } else if (userType === 'coach') {
         profile = await AuthController.createCoachProfile(newUser.id, profileData, transaction);
+      } else if (userType === 'njcaa_coach') {
+        profile = await AuthController.createNJCAACoachProfile(newUser.id, profileData, transaction);
       }
 
       // ========================
@@ -124,7 +126,7 @@ class AuthController {
       // Confirmer toutes les opérations en base de données
       await transaction.commit();
 
-      console.log(`🎉 Complete registration successful for: ${newUser.email}`);
+      console.log(`🎉 Complete registration successful for: ${newUser.email} (${userType})`);
 
       // ========================
       // ÉTAPE 6 : NOTIFICATIONS EMAIL ASYNCHRONES
@@ -152,70 +154,130 @@ class AuthController {
         });
 
       // 2. Notification aux admins pour traitement
-      AuthController.notifyAdminsOfNewRegistration(newUser)
-        .then(() => {
-          console.log(`📧 Admin notification sent for new ${userType}: ${newUser.email}`);
+      emailService.sendAdminNotificationEmail(newUser, userType)
+        .then(result => {
+          if (result.success) {
+            console.log(`📧 Admin notification sent for new ${userType}: ${newUser.email}`);
+          } else {
+            console.error(`❌ Failed to send admin notification for ${newUser.email}:`, result.error);
+          }
         })
         .catch(error => {
-          console.error(`❌ Admin notification error:`, error);
+          console.error(`❌ Admin notification error for ${newUser.email}:`, error);
         });
 
       // ========================
       // ÉTAPE 7 : RÉPONSE IMMÉDIATE AU CLIENT
       // ========================
       
-      // Préparer la réponse avec les informations du profil
-      const userResponse = newUser.toPublicJSON();
+      // Réponse adaptée selon le type d'utilisateur
+      const responseMessage = AuthController.getRegistrationSuccessMessage(userType);
       
       return res.status(201).json({
         status: 'success',
-        message: 'Account created successfully. Please check your email and wait for admin approval.',
+        message: responseMessage,
         data: {
-          user: userResponse,
-          profile: profile ? profile.toJSON() : null
-        },
-        meta: {
-          nextSteps: [
-            'Check your email for welcome instructions',
-            'Wait for admin approval (typically 24-48 hours)',
-            'Complete payment after approval',
-            'Access your personalized dashboard'
-          ],
-          emailSent: true, // Indicateur que l'email a été déclenché
-          estimatedApprovalTime: '24-48 hours'
+          user: newUser.toPublicJSON(),
+          userType: userType,
+          profileCreated: !!profile,
+          nextSteps: {
+            emailVerification: false, // Géré par validation admin
+            adminApproval: true,
+            estimatedApprovalTime: '24-48 hours'
+          }
         }
       });
 
     } catch (error) {
-      // En cas d'erreur, annuler TOUTE la transaction
+      // Rollback en cas d'erreur
       await transaction.rollback();
       
-      console.error('Enhanced registration error:', error);
+      console.error('Registration error:', error);
 
-      // Gestion spécifique des erreurs de validation Sequelize
+      // Gestion d'erreur spécialisée selon le type d'erreur
       if (error.name === 'SequelizeValidationError') {
-        const validationErrors = error.errors.map(err => ({
-          field: err.path,
-          message: err.message
-        }));
-
         return res.status(400).json({
           status: 'error',
-          message: 'Validation failed',
-          errors: validationErrors
+          message: 'Validation error during registration',
+          errors: error.errors.map(err => ({
+            field: err.path,
+            message: err.message
+          }))
         });
       }
-
+      
+      if (error.name === 'SequelizeUniqueConstraintError') {
+        return res.status(409).json({
+          status: 'error',
+          message: 'This email is already registered',
+          code: 'EMAIL_ALREADY_EXISTS'
+        });
+      }
+      
       return res.status(500).json({
         status: 'error',
-        message: 'Registration failed. Please try again later.',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+        message: 'Registration failed due to server error',
+        code: 'REGISTRATION_ERROR'
       });
     }
   }
 
   /**
-   * NOUVELLE MÉTHODE : Notification automatique des admins
+   * NOUVELLE MÉTHODE : Création du profil coach NJCAA
+   * 
+   * Cette méthode crée un profil spécialisé pour les coachs NJCAA
+   * avec leurs données métier spécifiques.
+   */
+  static async createNJCAACoachProfile(userId, profileData, transaction) {
+    try {
+      console.log(`🏟️ Creating NJCAA coach profile for user ${userId}`);
+      
+      const { position, phoneNumber, collegeId, division, teamSport } = profileData;
+      
+      // Gérer les données de college enrichies (depuis la validation Joi externe)
+      let actualCollegeId;
+      if (typeof collegeId === 'object' && collegeId.collegeId) {
+        actualCollegeId = collegeId.collegeId;
+      } else {
+        actualCollegeId = parseInt(collegeId, 10);
+      }
+      
+      const njcaaCoachProfile = await NJCAACoachProfile.create({
+        userId: userId,
+        position: position,
+        phoneNumber: phoneNumber,
+        collegeId: actualCollegeId,
+        division: division,
+        teamSport: teamSport,
+        totalEvaluations: 0, // Commencer à zéro
+        lastEvaluationDate: null
+      }, { transaction });
+
+      console.log(`✅ NJCAA coach profile created successfully (ID: ${njcaaCoachProfile.id})`);
+      
+      return njcaaCoachProfile;
+      
+    } catch (error) {
+      console.error('Error creating NJCAA coach profile:', error);
+      throw new Error(`NJCAA coach profile creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * MÉTHODE MISE À JOUR : Message de succès d'inscription adapté au type
+   */
+  static getRegistrationSuccessMessage(userType) {
+    const messages = {
+      player: 'Player account created successfully! Your account is pending admin approval.',
+      coach: 'Coach account created successfully! Your account is pending admin approval.',
+      njcaa_coach: 'NJCAA Coach account created successfully! Your account is pending admin approval and you will receive access to your player evaluation dashboard once approved.'
+    };
+    
+    return messages[userType] || 'Account created successfully! Your account is pending admin approval.';
+  }
+
+  /**
+   * Notification automatique des admins
    * 
    * Cette méthode récupère tous les administrateurs actifs et leur envoie
    * une notification de nouvelle inscription nécessitant leur attention.
@@ -401,18 +463,113 @@ class AuthController {
           actualCollegeId = parseInt(collegeId, 10);
         }
 
+        // Validation college NCAA
+        if (collegeId) {
+          try {
+            const college = await models.NCAACollege.findByPk(collegeId);
+            if (!college || !college.isActive) {
+              errors.push({
+                field: 'collegeId',
+                message: 'Invalid or inactive NCAA college'
+              });
+            }
+          } catch (dbError) {
+            errors.push({
+              field: 'collegeId',
+              message: 'Error validating NCAA college'
+            });
+          }
+        }
+        // Pour simplifier, on ne fait pas la validation croisée division/college pour l'instant
+      } else if (userType === 'njcaa_coach') {
+        // NOUVELLE VALIDATION : Pour les coachs NJCAA
+        const { position, phoneNumber, collegeId, division, teamSport } = profileData;
+
+        // Validation position (identique aux autres coachs)
+        if (!position || !['head_coach', 'assistant_coach'].includes(position)) {
+          errors.push({
+            field: 'position',
+            message: 'Position must be head_coach or assistant_coach'
+          });
+        }
+
+        // Validation téléphone (identique aux autres coachs)
+        if (!phoneNumber || phoneNumber.length < 10) {
+          errors.push({
+            field: 'phoneNumber',
+            message: 'Valid phone number is required'
+          });
+        }
+
+        // Validation division NJCAA spécifique
+        if (!division || !['njcaa_d1', 'njcaa_d2', 'njcaa_d3'].includes(division)) {
+          errors.push({
+            field: 'division',
+            message: 'Valid NJCAA division is required (D1, D2, or D3)'
+          });
+        }
+
+        // Validation sport (identique aux autres coachs)
+        if (!teamSport || !['mens_soccer', 'womens_soccer'].includes(teamSport)) {
+          errors.push({
+            field: 'teamSport',
+            message: 'Team sport must be mens_soccer or womens_soccer'
+          });
+        }
+
+        // Validation college NJCAA (différent des coachs NCAA)
+        let actualCollegeId;
+        let collegeData = null;
+
         if (!collegeId) {
           errors.push({
             field: 'collegeId',
-            message: 'College selection is required'
+            message: 'NJCAA college selection is required'
           });
-        } else if (isNaN(actualCollegeId)) {
+        } else if (typeof collegeId === 'object' && collegeId.collegeId) {
+          actualCollegeId = collegeId.collegeId;
+          collegeData = collegeId.collegeData;
+        } else if (typeof collegeId === 'number' || typeof collegeId === 'string') {
+          actualCollegeId = parseInt(collegeId, 10);
+        } else {
           errors.push({
             field: 'collegeId',
-            message: 'College ID must be a valid number'
+            message: 'Invalid college ID format'
           });
         }
-        // Pour simplifier, on ne fait pas la validation croisée division/college pour l'instant
+
+        // Validation du college NJCAA en base de données
+        if (actualCollegeId !== undefined && !isNaN(actualCollegeId)) {
+          if (collegeData) {
+            if (!collegeData.isActive) {
+              errors.push({
+                field: 'collegeId',
+                message: 'Selected NJCAA college is not active'
+              });
+            }
+          } else {
+            try {
+              const college = await models.NJCAACollege.findByPk(actualCollegeId);
+              
+              if (!college) {
+                errors.push({
+                  field: 'collegeId',
+                  message: 'Selected NJCAA college does not exist'
+                });
+              } else if (!college.isActive) {
+                errors.push({
+                  field: 'collegeId',
+                  message: 'Selected NJCAA college is not active'
+                });
+              }
+            } catch (dbError) {
+              errors.push({
+                field: 'collegeId',
+                message: 'Error validating NJCAA college selection'
+              });
+            }
+          }
+        }
       }
       
       const result = {
@@ -423,11 +580,12 @@ class AuthController {
       return result;
 
     } catch (error) {
+      console.error('Profile validation error:', error);
       return {
         isValid: false,
         errors: [{
           field: 'general',
-          message: 'Validation process failed. Please try again.'
+          message: 'Profile validation failed due to server error'
         }]
       };
     }

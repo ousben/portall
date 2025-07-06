@@ -65,11 +65,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     
     userType: {
-      type: DataTypes.ENUM('player', 'coach', 'admin'),
+      type: DataTypes.ENUM('player', 'coach', 'admin', 'njcaa_coach'),
       allowNull: false,
       field: 'user_type',
       validate: {
-        isIn: [['player', 'coach', 'admin']]
+        isIn: [['player', 'coach', 'admin', 'njcaa_coach']]
       }
     },
     
@@ -164,6 +164,11 @@ module.exports = (sequelize, DataTypes) => {
       return await this.getCoachProfile({
         include: ['college']
       });
+    } else if (this.userType === 'njcaa_coach') {
+      // NOUVEAU: Support pour les coachs NJCAA
+      return await this.getNjcaaCoachProfile({
+        include: ['college']
+      });
     }
     return null;
   };
@@ -192,16 +197,24 @@ module.exports = (sequelize, DataTypes) => {
 
   // NOUVELLES associations avec les profils
   User.associate = function(models) {
-    // Un utilisateur peut avoir un profil joueur OU un profil coach
+    // Un utilisateur peut avoir un profil joueur
     User.hasOne(models.PlayerProfile, {
       foreignKey: 'userId',
       as: 'playerProfile',
       constraints: false // Permet la relation optionnelle
     });
     
+    // Un utilisateur peut avoir un profil coach NCAA/NAIA
     User.hasOne(models.CoachProfile, {
       foreignKey: 'userId',
       as: 'coachProfile',
+      constraints: false
+    });
+    
+    // NOUVEAU: Un utilisateur peut avoir un profil coach NJCAA
+    User.hasOne(models.NJCAACoachProfile, {
+      foreignKey: 'userId',
+      as: 'njcaaCoachProfile',
       constraints: false
     });
   };

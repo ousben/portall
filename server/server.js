@@ -73,6 +73,8 @@ const adminRoutes = require('./routes/admin');
 // Routes des dashboards utilisateurs (Phase 3)
 const playerRoutes = require('./routes/players');
 const coachRoutes = require('./routes/coaches');
+// NOUVEAU : Routes pour les coachs NJCAA (Phase 5)
+const njcaaCoachRoutes = require('./routes/njcaaCoaches');
 
 // Routes de gestion des abonnements (Phase 4)
 const subscriptionRoutes = require('./routes/subscriptions');
@@ -217,6 +219,10 @@ console.log('👤 Player routes loaded at /api/players');
 
 app.use('/api/coaches', coachRoutes);
 console.log('🏟️ Coach routes loaded at /api/coaches');
+
+// NOUVEAU : Routes spécialisées pour les coachs NJCAA
+app.use('/api/njcaa-coaches', njcaaCoachRoutes);
+console.log('🏟️ NJCAA Coach routes loaded at /api/njcaa-coaches (player evaluation system)');
 
 // Routes des abonnements - Cœur du business model
 app.use('/api/subscriptions', subscriptionRoutes);
