@@ -4,23 +4,33 @@ const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 
 /**
- * Middleware d'authentification et d'autorisation étendu
+ * Middleware d'authentification et d'autorisation étendu pour Phase 5
+ * 
+ * EXPLICATION PÉDAGOGIQUE : Ce middleware illustre parfaitement le concept de sécurité
+ * multicouche. Comme un système de sécurité d'aéroport, il vérifie d'abord l'identité
+ * (authentification), puis les permissions d'accès (autorisation), et enfin les
+ * autorisations spécifiques selon le contexte (contrôles métier).
  * 
  * MISE À JOUR MAJEURE : Support complet du type d'utilisateur 'njcaa_coach'
- * avec ses règles d'autorisation spécifiques.
+ * avec ses règles d'autorisation spécifiques :
+ * - Accès gratuit (pas d'abonnement Stripe)
+ * - Fonctionnalités d'évaluation de joueurs
+ * - Dashboard simplifié par rapport aux coachs NCAA/NAIA
  * 
- * Ce middleware gère maintenant quatre types d'utilisateurs distincts :
- * - 'player' : Joueurs NJCAA
- * - 'coach' : Coachs NCAA/NAIA (avec abonnements)
- * - 'njcaa_coach' : Coachs NJCAA (accès gratuit, évaluations)
- * - 'admin' : Administrateurs
+ * Cette extension démontre comment ajouter de nouvelles fonctionnalités de sécurité
+ * sans compromettre les mesures existantes.
  */
 
 /**
  * Middleware d'authentification de base
  * 
- * Vérifie la validité du token JWT et charge les informations utilisateur.
- * Fonctionne de manière identique pour tous les types d'utilisateurs.
+ * CONCEPT PÉDAGOGIQUE : Cette fonction est le gardien de votre API. Elle vérifie
+ * que chaque requête provient d'un utilisateur authentifié valide. C'est comme
+ * vérifier un passeport à la frontière - nous validons l'identité avant d'autoriser
+ * l'entrée dans le système.
+ * 
+ * ROBUSTESSE : Cette méthode fonctionne de manière identique pour tous les types
+ * d'utilisateurs, démontrant la solidité de l'architecture basée sur JWT.
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -79,11 +89,11 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Ajouter les informations utilisateur à la requête
+    // Ajouter les informations utilisateur à la requête (étendu pour njcaa_coach)
     req.user = {
       id: user.id,
       email: user.email,
-      userType: user.userType,
+      userType: user.userType, // Maintenant inclut 'njcaa_coach'
       firstName: user.firstName,
       lastName: user.lastName,
       isActive: user.isActive,
@@ -105,7 +115,12 @@ const authenticate = async (req, res, next) => {
 /**
  * Middleware d'autorisation par type d'utilisateur (ÉTENDU)
  * 
- * NOUVEAU : Support complet pour 'njcaa_coach' avec ses règles spécifiques.
+ * CONCEPT PÉDAGOGIQUE : Si l'authentification répond à "Qui êtes-vous ?",
+ * l'autorisation répond à "Que pouvez-vous faire ?". Cette fonction vérifie
+ * que l'utilisateur authentifié a le bon "badge d'accès" pour la ressource demandée.
+ * 
+ * EXTENSIBILITÉ : L'ajout du type 'njcaa_coach' se fait naturellement grâce
+ * à l'architecture basée sur des tableaux et des comparaisons de chaînes.
  * 
  * @param {string|string[]} allowedTypes - Type(s) d'utilisateur autorisé(s)
  * @returns {Function} Middleware function
@@ -124,7 +139,7 @@ const authorize = (allowedTypes) => {
       });
     }
 
-    // Vérifier l'autorisation par type
+    // Vérifier l'autorisation par type (maintenant étendu pour njcaa_coach)
     if (!types.includes(req.user.userType)) {
       return res.status(403).json({
         status: 'error',
@@ -142,8 +157,13 @@ const authorize = (allowedTypes) => {
 /**
  * NOUVEAU : Middleware spécialisé pour les coachs NJCAA
  * 
- * Ce middleware vérifie spécifiquement l'accès aux fonctionnalités
- * réservées aux coachs NJCAA.
+ * EXPLICATION PÉDAGOGIQUE : Ce middleware montre comment créer des contrôles d'accès
+ * très spécifiques. Plutôt que d'utiliser le middleware générique authorize(),
+ * nous créons une fonction dédiée qui peut inclure des vérifications métier
+ * spécifiques aux coachs NJCAA.
+ * 
+ * USAGE : Utilisé dans les routes qui sont exclusivement réservées aux coachs NJCAA,
+ * comme les fonctionnalités d'évaluation de joueurs.
  */
 const requireNJCAACoach = (req, res, next) => {
   if (!req.user) {
@@ -167,10 +187,14 @@ const requireNJCAACoach = (req, res, next) => {
 };
 
 /**
- * NOUVEAU : Middleware pour les fonctionnalités réservées aux coachs (tous types)
+ * NOUVEAU : Middleware pour les fonctionnalités communes à tous les coachs
  * 
- * Permet l'accès aux coachs NCAA/NAIA ET aux coachs NJCAA.
- * Utile pour les fonctionnalités communes à tous les coachs.
+ * CONCEPT D'ABSTRACTION : Ce middleware reconnaît que malgré leurs différences,
+ * les coachs NCAA/NAIA et NJCAA partagent certaines fonctionnalités communes.
+ * C'est un excellent exemple de généralisation en programmation.
+ * 
+ * USAGE : Pour les fonctionnalités qui concernent tous les types de coachs,
+ * comme consulter des profils de joueurs ou gérer leurs paramètres de base.
  */
 const requireAnyCoach = (req, res, next) => {
   if (!req.user) {
@@ -197,6 +221,10 @@ const requireAnyCoach = (req, res, next) => {
 
 /**
  * Middleware pour les fonctionnalités réservées aux admins (inchangé)
+ * 
+ * STABILITÉ : Cette fonction illustre comment les bonnes abstractions résistent
+ * au temps. Malgré l'ajout d'un nouveau type d'utilisateur, la logique admin
+ * reste parfaitement stable.
  */
 const requireAdmin = (req, res, next) => {
   if (!req.user) {
@@ -220,10 +248,17 @@ const requireAdmin = (req, res, next) => {
 };
 
 /**
- * NOUVEAU : Middleware pour vérifier les permissions d'évaluation de joueurs
+ * NOUVEAU : Middleware pour les permissions d'évaluation de joueurs
  * 
- * Ce middleware spécialisé vérifie que l'utilisateur a le droit d'évaluer
- * ou de consulter les évaluations de joueurs selon des règles métier complexes.
+ * EXPLICATION PÉDAGOGIQUE : Ce middleware illustre le concept de permissions granulaires.
+ * Différents types d'utilisateurs ont différents niveaux d'accès à la même ressource.
+ * C'est comme un système de bibliothèque où certains peuvent lire, d'autres écrire,
+ * et d'autres administrer.
+ * 
+ * RÈGLES MÉTIER COMPLEXES :
+ * - Créer/Modifier : Seuls les coachs NJCAA (propriétaires des évaluations)
+ * - Lire : Coachs NJCAA + Coachs NCAA/NAIA (consommateurs des évaluations) + Admins
+ * - Supprimer : Seuls les admins (pour modération)
  */
 const requirePlayerEvaluationAccess = (accessType = 'read') => {
   return (req, res, next) => {
@@ -291,8 +326,12 @@ const requirePlayerEvaluationAccess = (accessType = 'read') => {
 /**
  * Middleware utilitaire pour enrichir les informations utilisateur
  * 
- * Ajoute des métadonnées utiles selon le type d'utilisateur.
- * Utile pour la personnalisation de l'interface côté client.
+ * CONCEPT PÉDAGOGIQUE : Ce middleware montre comment ajouter des métadonnées
+ * contextuelles à une requête. Il enrichit l'objet req.user avec des informations
+ * sur les capacités et permissions de l'utilisateur selon son type.
+ * 
+ * PERSONNALISATION : Ces métadonnées permettent au frontend d'adapter
+ * dynamiquement l'interface selon les permissions de l'utilisateur.
  */
 const enrichUserContext = async (req, res, next) => {
   if (!req.user) {
@@ -300,35 +339,40 @@ const enrichUserContext = async (req, res, next) => {
   }
 
   try {
-    // Enrichir le contexte selon le type d'utilisateur
+    // Enrichir le contexte selon le type d'utilisateur (étendu pour njcaa_coach)
     switch (req.user.userType) {
       case 'player':
         req.user.capabilities = ['profile_management', 'view_coach_searches'];
         req.user.subscriptionRequired = false;
+        req.user.dashboardRoute = '/player/dashboard';
         break;
 
       case 'coach':
         req.user.capabilities = ['player_search', 'advanced_filters', 'subscription_management'];
         req.user.subscriptionRequired = true;
+        req.user.dashboardRoute = '/coach/dashboard';
         break;
 
       case 'njcaa_coach':
         // NOUVEAU : Capacités spécifiques aux coachs NJCAA
         req.user.capabilities = ['player_evaluation', 'team_management', 'evaluation_history'];
         req.user.subscriptionRequired = false; // Accès gratuit
+        req.user.dashboardRoute = '/njcaa-coach/dashboard';
         break;
 
       case 'admin':
         req.user.capabilities = ['user_management', 'system_administration', 'all_access'];
         req.user.subscriptionRequired = false;
+        req.user.dashboardRoute = '/admin/dashboard';
         break;
 
       default:
         req.user.capabilities = [];
         req.user.subscriptionRequired = false;
+        req.user.dashboardRoute = '/';
     }
 
-    // Ajouter des métadonnées temporelles
+    // Ajouter des métadonnées temporelles utiles
     req.user.sessionInfo = {
       authenticatedAt: new Date(),
       userAgent: req.headers['user-agent'],
@@ -344,6 +388,7 @@ const enrichUserContext = async (req, res, next) => {
   }
 };
 
+// EXPORT ÉTENDU avec toutes les nouvelles fonctions
 module.exports = {
   authenticate,
   authorize,
@@ -351,5 +396,5 @@ module.exports = {
   requireNJCAACoach, // NOUVEAU
   requireAnyCoach, // NOUVEAU
   requirePlayerEvaluationAccess, // NOUVEAU
-  enrichUserContext // NOUVEAU
+  enrichUserContext // ÉTENDU
 };

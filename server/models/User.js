@@ -13,11 +13,7 @@ module.exports = (sequelize, DataTypes) => {
       unique: true,
       validate: {
         isEmail: true,
-        notEmpty: true,
-        len: [5, 255]
-      },
-      set(value) {
-        this.setDataValue('email', value.toLowerCase().trim());
+        len: [1, 255]
       }
     },
     
@@ -25,14 +21,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false,
       validate: {
-        len: [8, 128],
-        notEmpty: true,
-        isStrongPassword(value) {
-          const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
-          if (!strongPasswordRegex.test(value)) {
-            throw new Error('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character');
-          }
-        }
+        len: [8, 255]
       }
     },
     
@@ -40,30 +29,21 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false,
       validate: {
-        notEmpty: true,
-        len: [2, 50],
-        isAlpha: true
+        len: [1, 50]
       },
-      field: 'first_name',
-      set(value) {
-        this.setDataValue('firstName', value.charAt(0).toUpperCase() + value.slice(1).toLowerCase().trim());
-      }
+      field: 'first_name'
     },
     
     lastName: {
       type: DataTypes.STRING,
       allowNull: false,
       validate: {
-        notEmpty: true,
-        len: [2, 50],
-        isAlpha: true
+        len: [1, 50]
       },
-      field: 'last_name',
-      set(value) {
-        this.setDataValue('lastName', value.charAt(0).toUpperCase() + value.slice(1).toLowerCase().trim());
-      }
+      field: 'last_name'
     },
     
+    // MISE À JOUR: Enum étendu pour inclure njcaa_coach
     userType: {
       type: DataTypes.ENUM('player', 'coach', 'admin', 'njcaa_coach'),
       allowNull: false,
@@ -114,7 +94,7 @@ module.exports = (sequelize, DataTypes) => {
         if (user.password) {
           user.password = await bcrypt.hash(user.password, bcryptConfig.saltRounds);
         }
-        console.log(`🔐 Creating new user: ${user.email}`);
+        console.log(`🔐 Creating new user: ${user.email} (type: ${user.userType})`);
       },
       
       beforeUpdate: async (user) => {
@@ -154,7 +134,7 @@ module.exports = (sequelize, DataTypes) => {
     await this.save({ fields: ['lastLogin'] });
   };
 
-  // NOUVELLES méthodes pour gérer les profils
+  // MISE À JOUR: Méthodes pour gérer les profils avec le nouveau type
   User.prototype.getProfile = async function() {
     if (this.userType === 'player') {
       return await this.getPlayerProfile({
@@ -195,7 +175,7 @@ module.exports = (sequelize, DataTypes) => {
     return !!user;
   };
 
-  // NOUVELLES associations avec les profils
+  // MISE À JOUR: Associations étendues pour inclure les coachs NJCAA
   User.associate = function(models) {
     // Un utilisateur peut avoir un profil joueur
     User.hasOne(models.PlayerProfile, {

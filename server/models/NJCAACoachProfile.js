@@ -156,6 +156,12 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'collegeId',
       as: 'college'
     });
+
+    // Relation 1:N avec PlayerEvaluation
+    NJCAACoachProfile.hasMany(models.PlayerEvaluation, {
+      foreignKey: 'coachId',
+      as: 'evaluations'
+    });
   };
 
   return NJCAACoachProfile;

@@ -4,7 +4,7 @@ const express = require('express');
 const NJCAACoachController = require('../controllers/njcaaCoachController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validatePlayerEvaluation } = require('../middleware/advancedValidation');
-const { playerEvaluationLimiter, generalRateLimit } = require('../middleware/rateLimiting');
+const { generalAuthLimiter } = require('../middleware/rateLimiting');
 const Joi = require('joi');
 
 const router = express.Router();
@@ -12,14 +12,17 @@ const router = express.Router();
 /**
  * Routes spécialisées pour les coachs NJCAA
  * 
- * ARCHITECTURE : Ces routes implémentent le workflow spécifique aux coachs NJCAA
- * qui est centré sur l'évaluation de leurs joueurs plutôt que sur la recherche
- * et les abonnements comme les coachs NCAA/NAIA.
+ * ARCHITECTURE PÉDAGOGIQUE : Ces routes illustrent parfaitement comment structurer
+ * une API REST selon les domaines métier. Chaque endpoint correspond à une fonctionnalité
+ * spécifique du workflow des coachs NJCAA que tu as défini dans tes spécifications.
  * 
- * Toutes les routes nécessitent :
- * 1. Authentification (utilisateur connecté)
- * 2. Autorisation (type d'utilisateur 'njcaa_coach')
- * 3. Rate limiting approprié selon l'action
+ * CONCEPTS ENSEIGNÉS :
+ * 1. SÉPARATION DES RESPONSABILITÉS : Routes = Interface HTTP, Controller = Logique métier
+ * 2. MIDDLEWARE EN CASCADE : Chaque requête passe par plusieurs couches de validation
+ * 3. CONVENTIONS REST : GET pour lire, POST pour créer, PUT pour modifier
+ * 4. SÉCURITÉ MULTICOUCHE : Authentification + Autorisation + Validation + Rate limiting
+ * 
+ * Cette approche modulaire facilite la maintenance et l'évolution future de l'API.
  */
 
 // ========================
@@ -29,8 +32,12 @@ const router = express.Router();
 /**
  * Middleware pour vérifier que l'utilisateur est bien un coach NJCAA
  * 
- * Ce middleware s'assure que seuls les utilisateurs de type 'njcaa_coach'
- * peuvent accéder à ces routes, implémentant une sécurité par rôle.
+ * EXPLICATION PÉDAGOGIQUE : Ce middleware illustre le principe de responsabilité unique.
+ * Au lieu de vérifier le type d'utilisateur dans chaque contrôleur, nous le faisons
+ * une seule fois ici, gardant les contrôleurs focalisés sur la logique métier.
+ * 
+ * C'est un excellent exemple de "fail fast" - nous rejetons les requêtes non autorisées
+ * le plus tôt possible dans le pipeline, économisant les ressources serveur.
  */
 const requireNJCAACoachAccess = (req, res, next) => {
   if (req.user.userType !== 'njcaa_coach') {
@@ -51,43 +58,48 @@ const requireNJCAACoachAccess = (req, res, next) => {
  * GET /api/njcaa-coaches/dashboard
  * 
  * Page principale du coach NJCAA avec la liste de ses joueurs
- * et les fonctionnalités d'évaluation.
  * 
- * Cette route implémente la "Main Page" de tes spécifications.
+ * EXPLICATION : Cette route implémente ta "Main Page" avec toutes ses fonctionnalités :
+ * - Liste dynamique des joueurs du même college et genre
+ * - Statuts d'évaluation pour chaque joueur
+ * - Statistiques d'activité du coach
+ * - Interface pour démarrer les évaluations
  */
 router.get('/dashboard',
-  authenticate,
-  requireNJCAACoachAccess,
-  generalRateLimit,
-  NJCAACoachController.getDashboard
+  authenticate, // COUCHE 1 : Utilisateur connecté ?
+  requireNJCAACoachAccess, // COUCHE 2 : Type d'utilisateur correct ?
+  generalAuthLimiter, // COUCHE 3 : Limite de fréquence respectée ?
+  NJCAACoachController.getDashboard // COUCHE 4 : Logique métier
 );
 
 /**
  * GET /api/njcaa-coaches/settings
  * 
- * Page "Settings" pour la gestion du profil personnel du coach.
+ * Page "Settings" pour la gestion du profil personnel
  * 
- * Cette route implémente la deuxième page du dashboard selon tes spécifications.
+ * CONCEPT : Cette route montre comment séparer les préoccupations entre
+ * dashboard (données métier) et settings (configuration personnelle).
  */
 router.get('/settings',
   authenticate,
   requireNJCAACoachAccess,
-  generalRateLimit,
+  generalAuthLimiter,
   NJCAACoachController.getSettings
 );
 
 /**
  * PUT /api/njcaa-coaches/settings
  * 
- * Mise à jour des paramètres modifiables du profil coach.
+ * Mise à jour des paramètres modifiables du profil
  * 
- * Seuls certains champs peuvent être modifiés sans validation admin.
+ * SÉCURITÉ : Cette route inclut une validation Joi inline pour démontrer
+ * comment sécuriser les modifications de données sensibles.
  */
 router.put('/settings',
   authenticate,
   requireNJCAACoachAccess,
-  generalRateLimit,
-  // Validation des données de mise à jour
+  generalAuthLimiter,
+  // VALIDATION INLINE : Exemple de validation spécialisée pour un endpoint unique
   (req, res, next) => {
     const updateSchema = Joi.object({
       phoneNumber: Joi.string()
@@ -130,15 +142,16 @@ router.put('/settings',
 /**
  * GET /api/njcaa-coaches/players/:playerId/evaluation
  * 
- * Récupérer l'évaluation actuelle d'un joueur spécifique.
+ * Récupérer l'évaluation actuelle d'un joueur spécifique
  * 
- * Utilisé pour pré-remplir le formulaire d'évaluation côté client.
+ * USAGE : Cette route permet de pré-remplir le formulaire d'évaluation
+ * côté client, améliorant l'expérience utilisateur.
  */
 router.get('/players/:playerId/evaluation',
   authenticate,
   requireNJCAACoachAccess,
-  generalRateLimit,
-  // Validation du paramètre playerId
+  generalAuthLimiter,
+  // VALIDATION DE PARAMÈTRE : Assurer que playerId est un nombre valide
   (req, res, next) => {
     const paramSchema = Joi.object({
       playerId: Joi.number().integer().positive().required()
@@ -162,15 +175,18 @@ router.get('/players/:playerId/evaluation',
 /**
  * POST /api/njcaa-coaches/players/:playerId/evaluation
  * 
- * Créer ou mettre à jour l'évaluation d'un joueur.
+ * Créer ou mettre à jour l'évaluation d'un joueur
  * 
- * Cette route implémente le cœur de la fonctionnalité métier des coachs NJCAA
- * avec toutes les questions d'évaluation que tu as spécifiées.
+ * FONCTIONNALITÉ CENTRALE : Cette route implémente le cœur du système d'évaluation
+ * avec toutes les questions que tu as spécifiées dans tes requirements.
+ * 
+ * ARCHITECTURE : La validation complexe est déléguée au middleware spécialisé
+ * validatePlayerEvaluation, gardant cette route focalisée sur le routage HTTP.
  */
 router.post('/players/:playerId/evaluation',
   authenticate,
   requireNJCAACoachAccess,
-  playerEvaluationLimiter, // Rate limiting plus restrictif pour les évaluations
+  generalAuthLimiter, // Note : Pas de rate limiting trop restrictif pour les évaluations
   // Validation du paramètre playerId
   (req, res, next) => {
     const paramSchema = Joi.object({
@@ -189,7 +205,7 @@ router.post('/players/:playerId/evaluation',
     req.params = value;
     next();
   },
-  validatePlayerEvaluation, // Middleware de validation avancé pour les évaluations
+  validatePlayerEvaluation, // VALIDATION MÉTIER : Toutes les questions d'évaluation
   NJCAACoachController.evaluatePlayer
 );
 
@@ -200,14 +216,15 @@ router.post('/players/:playerId/evaluation',
 /**
  * GET /api/njcaa-coaches/evaluation-history
  * 
- * Historique complet des évaluations effectuées par le coach.
+ * Historique complet des évaluations effectuées par le coach
  * 
- * Route optionnelle pour les coachs qui veulent suivre leur activité.
+ * FONCTIONNALITÉ BONUS : Cette route permet aux coachs de suivre leur activité
+ * et d'identifier les patterns dans leurs évaluations.
  */
 router.get('/evaluation-history',
   authenticate,
   requireNJCAACoachAccess,
-  generalRateLimit,
+  generalAuthLimiter,
   NJCAACoachController.getEvaluationHistory
 );
 
@@ -218,9 +235,11 @@ router.get('/evaluation-history',
 /**
  * GET /api/njcaa-coaches/health
  * 
- * Endpoint de santé pour vérifier que le service coach NJCAA fonctionne.
+ * Endpoint de santé pour vérifier que le service coach NJCAA fonctionne
  * 
- * Utile pour le monitoring et les tests automatisés.
+ * CONCEPT PÉDAGOGIQUE : Cette route illustre l'importance du monitoring
+ * et de l'observabilité dans les applications de production. Elle permet
+ * de vérifier rapidement l'état du service sans déclencher de logique métier.
  */
 router.get('/health', (req, res) => {
   res.json({

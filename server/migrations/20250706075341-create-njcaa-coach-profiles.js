@@ -1,4 +1,4 @@
-// portall/server/migrations/20250706075341-create-njcaa-coach-profiles.js
+// portall/server/migrations/20250706000002-create-njcaa-coach-profiles.js
 
 'use strict';
 
