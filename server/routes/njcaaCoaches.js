@@ -5,8 +5,8 @@ const router = express.Router();
 const Joi = require('joi');
 const NJCAACoachController = require('../controllers/njcaaCoachController');
 const { authenticate, requireNJCAACoachAccess } = require('../middleware/auth');
-const { generalAuthLimiter } = require('../middleware/rateLimiter');
-const { validatePlayerEvaluation } = require('../middleware/playerEvaluationValidation'); // ✅ IMPORT CORRIGÉ
+const { generalAuthLimiter } = require('../middleware/rateLimiting'); // ✅ IMPORT CORRIGÉ : rateLimiting au lieu de rateLimiter
+const { validatePlayerEvaluation } = require('../middleware/playerEvaluationValidation');
 
 /**
  * 🏟️ Routes dédiées aux coachs NJCAA
