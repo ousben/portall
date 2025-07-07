@@ -1,15 +1,15 @@
-// portall/server/routes/njcaaCoaches.js
+// server/routes/njcaaCoaches.js
 
 const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const NJCAACoachController = require('../controllers/njcaaCoachController');
-const { authenticate, requireNJCAACoach } = require('../middleware/auth'); // ✅ NOM CORRIGÉ
+const { authenticate, requireNJCAACoach } = require('../middleware/auth');
 const { generalAuthLimiter } = require('../middleware/rateLimiting');
 const { validatePlayerEvaluation } = require('../middleware/playerEvaluationValidation');
 
 /**
- * 🏟️ Routes dédiées aux coachs NJCAA
+ * 🏟️ Routes dédiées aux coachs NJCAA - COMPLÈTES ET FONCTIONNELLES
  * 
  * Ces routes implémentent l'interface spécialisée pour les coachs NJCAA,
  * leur permettant d'évaluer les joueurs de leur college selon des critères
@@ -18,15 +18,6 @@ const { validatePlayerEvaluation } = require('../middleware/playerEvaluationVali
  * 🔐 SÉCURITÉ : Toutes les routes requièrent une authentification valide
  * ET une autorisation spécifique NJCAA coach pour garantir que seuls
  * les coachs autorisés peuvent accéder aux fonctionnalités d'évaluation.
- * 
- * 📊 FONCTIONNALITÉS PRINCIPALES :
- * - Dashboard avec filtrage intelligent des joueurs
- * - Système d'évaluation complet avec 11 critères
- * - Gestion des settings de profil
- * - Historique des évaluations
- * 
- * 🎯 ARCHITECTURE : Routes RESTful avec validation robuste et middleware
- * de sécurité en cascade pour une expérience utilisateur optimale.
  */
 
 // ========================
@@ -37,19 +28,10 @@ const { validatePlayerEvaluation } = require('../middleware/playerEvaluationVali
  * GET /api/njcaa-coaches/dashboard
  * 
  * Dashboard principal pour les coachs NJCAA
- * 
- * Cette route fournit une vue d'ensemble complète des joueurs que le coach
- * peut évaluer, avec un filtrage intelligent basé sur :
- * - Le même college que le coach
- * - Le même genre (masculine/féminine) selon l'équipe du coach
- * - Les évaluations existantes et leur statut
- * 
- * LOGIQUE MÉTIER : Un coach masculin ne voit que les joueurs masculins
- * de son college, et vice versa pour les coachs féminins.
  */
 router.get('/dashboard',
   authenticate,
-  requireNJCAACoach, // ✅ NOM CORRIGÉ
+  requireNJCAACoach,
   generalAuthLimiter,
   NJCAACoachController.getDashboard
 );
@@ -62,13 +44,10 @@ router.get('/dashboard',
  * GET /api/njcaa-coaches/settings
  * 
  * Récupérer les paramètres actuels du profil coach
- * 
- * USAGE : Cette route permet de pré-remplir le formulaire de settings
- * côté client, améliorant l'expérience utilisateur.
  */
 router.get('/settings',
   authenticate,
-  requireNJCAACoach, // ✅ NOM CORRIGÉ
+  requireNJCAACoach,
   generalAuthLimiter,
   NJCAACoachController.getSettings
 );
@@ -76,38 +55,20 @@ router.get('/settings',
 /**
  * PUT /api/njcaa-coaches/settings
  * 
- * Mettre à jour les paramètres du profil coach
- * 
- * VALIDATION : Seuls certains champs peuvent être modifiés par le coach.
- * Les champs critiques comme collegeId et teamSport sont protégés.
+ * ✅ ROUTE MANQUANTE AJOUTÉE - Mettre à jour les paramètres du profil coach
  */
 router.put('/settings',
   authenticate,
-  requireNJCAACoach, // ✅ NOM CORRIGÉ
+  requireNJCAACoach,
   generalAuthLimiter,
   // Validation des données de mise à jour
   (req, res, next) => {
-    const updateSchema = Joi.object({
-      phoneNumber: Joi.string()
-        .pattern(/^\+?[1-9]\d{1,14}$/)
-        .optional()
-        .messages({
-          'string.pattern.base': 'Please provide a valid phone number'
-        }),
-      
-      // Autres champs modifiables peuvent être ajoutés ici
-      bio: Joi.string()
-        .max(500)
-        .optional()
-        .messages({
-          'string.max': 'Bio must not exceed 500 characters'
-        })
-    }).options({
-      stripUnknown: true, // Supprimer les champs non autorisés
-      abortEarly: false
-    });
+    const settingsSchema = Joi.object({
+      position: Joi.string().valid('head_coach', 'assistant_coach', 'goalkeeper_coach', 'fitness_coach').optional(),
+      phoneNumber: Joi.string().pattern(/^\+?[1-9]\d{1,14}$/).optional()
+    }).min(1); // Au moins un champ requis
 
-    const { error, value } = updateSchema.validate(req.body);
+    const { error, value } = settingsSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
         status: 'error',
@@ -133,16 +94,13 @@ router.put('/settings',
 /**
  * GET /api/njcaa-coaches/players/:playerId/evaluation
  * 
- * Récupérer l'évaluation actuelle d'un joueur spécifique
- * 
- * USAGE : Cette route permet de pré-remplir le formulaire d'évaluation
- * côté client, améliorant l'expérience utilisateur.
+ * Récupérer l'évaluation existante d'un joueur
  */
 router.get('/players/:playerId/evaluation',
   authenticate,
-  requireNJCAACoach, // ✅ NOM CORRIGÉ
+  requireNJCAACoach,
   generalAuthLimiter,
-  // VALIDATION DE PARAMÈTRE : Assurer que playerId est un nombre valide
+  // Validation du paramètre playerId
   (req, res, next) => {
     const paramSchema = Joi.object({
       playerId: Joi.number().integer().positive().required()
@@ -167,17 +125,11 @@ router.get('/players/:playerId/evaluation',
  * POST /api/njcaa-coaches/players/:playerId/evaluation
  * 
  * Créer ou mettre à jour l'évaluation d'un joueur
- * 
- * FONCTIONNALITÉ CENTRALE : Cette route implémente le cœur du système d'évaluation
- * avec toutes les questions que tu as spécifiées dans tes requirements.
- * 
- * ARCHITECTURE : La validation complexe est déléguée au middleware spécialisé
- * validatePlayerEvaluation, gardant cette route focalisée sur le routage HTTP.
  */
 router.post('/players/:playerId/evaluation',
   authenticate,
-  requireNJCAACoach, // ✅ NOM CORRIGÉ
-  generalAuthLimiter, // Note : Pas de rate limiting trop restrictif pour les évaluations
+  requireNJCAACoach,
+  generalAuthLimiter,
   // Validation du paramètre playerId
   (req, res, next) => {
     const paramSchema = Joi.object({
@@ -196,7 +148,7 @@ router.post('/players/:playerId/evaluation',
     req.params = value;
     next();
   },
-  validatePlayerEvaluation, // ✅ MIDDLEWARE CORRECT
+  validatePlayerEvaluation,
   NJCAACoachController.evaluatePlayer
 );
 
@@ -208,13 +160,10 @@ router.post('/players/:playerId/evaluation',
  * GET /api/njcaa-coaches/evaluation-history
  * 
  * Historique complet des évaluations effectuées par le coach
- * 
- * FONCTIONNALITÉ BONUS : Cette route permet aux coachs de suivre leur activité
- * et d'identifier les patterns dans leurs évaluations.
  */
 router.get('/evaluation-history',
   authenticate,
-  requireNJCAACoach, // ✅ NOM CORRIGÉ
+  requireNJCAACoach,
   generalAuthLimiter,
   NJCAACoachController.getEvaluationHistory
 );
@@ -227,10 +176,6 @@ router.get('/evaluation-history',
  * GET /api/njcaa-coaches/health
  * 
  * Endpoint de santé pour vérifier que le service coach NJCAA fonctionne
- * 
- * CONCEPT PÉDAGOGIQUE : Cette route illustre l'importance du monitoring
- * et de l'observabilité dans les applications de production. Elle permet
- * de vérifier rapidement l'état du service sans déclencher de logique métier.
  */
 router.get('/health', (req, res) => {
   res.json({

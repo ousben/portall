@@ -1,107 +1,209 @@
-// portall/server/middleware/playerEvaluationValidation.js
+// server/middleware/playerEvaluationValidation.js
 
 const Joi = require('joi');
 
 /**
- * 🎯 SCHÉMA CORRIGÉ : Aligné avec le modèle Sequelize ET les tests
+ * 🎯 Middleware de validation pour les évaluations de joueurs par les coachs NJCAA
  * 
- * Cette version résout les incohérences entre Joi, Sequelize et les tests
- * en utilisant les noms de champs des tests mais les contraintes du modèle.
+ * CONCEPT PÉDAGOGIQUE : Ce middleware illustre comment créer une validation métier
+ * complexe avec des règles spécifiques au domaine du recrutement sportif.
+ * 
+ * 📊 SYSTÈME D'ÉVALUATION À 11 CRITÈRES :
+ * Chaque critère est noté de 1 à 10, permettant une évaluation granulaire
+ * des capacités du joueur selon les standards NJCAA.
  */
+
+// ========================
+// SCHÉMA DE VALIDATION PRINCIPAL
+// ========================
+
 const playerEvaluationSchema = Joi.object({
   // ========================
-  // QUESTIONS FERMÉES (RÉPONSES STRUCTURÉES)
+  // ÉVALUATIONS TECHNIQUES (1-10)
   // ========================
   
+  speed: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Speed assessment is required',
+      'number.base': 'Speed must be a number',
+      'number.integer': 'Speed must be a whole number',
+      'number.min': 'Speed rating must be at least 1',
+      'number.max': 'Speed rating cannot exceed 10'
+    }),
+
+  agility: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Agility assessment is required',
+      'number.base': 'Agility must be a number',
+      'number.integer': 'Agility must be a whole number',
+      'number.min': 'Agility rating must be at least 1',
+      'number.max': 'Agility rating cannot exceed 10'
+    }),
+
+  ballControl: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Ball control assessment is required',
+      'number.base': 'Ball control must be a number',
+      'number.integer': 'Ball control must be a whole number',
+      'number.min': 'Ball control rating must be at least 1',
+      'number.max': 'Ball control rating cannot exceed 10'
+    }),
+
+  passing: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Passing assessment is required',
+      'number.base': 'Passing must be a number',
+      'number.integer': 'Passing must be a whole number',
+      'number.min': 'Passing rating must be at least 1',
+      'number.max': 'Passing rating cannot exceed 10'
+    }),
+
+  shooting: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Shooting assessment is required',
+      'number.base': 'Shooting must be a number',
+      'number.integer': 'Shooting must be a whole number',
+      'number.min': 'Shooting rating must be at least 1',
+      'number.max': 'Shooting rating cannot exceed 10'
+    }),
+
+  defending: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Defending assessment is required',
+      'number.base': 'Defending must be a number',
+      'number.integer': 'Defending must be a whole number',
+      'number.min': 'Defending rating must be at least 1',
+      'number.max': 'Defending rating cannot exceed 10'
+    }),
+
+  // ========================
+  // ÉVALUATIONS MENTALES ET PHYSIQUES (1-10)
+  // ========================
+
+  gameIntelligence: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Game intelligence assessment is required',
+      'number.base': 'Game intelligence must be a number',
+      'number.integer': 'Game intelligence must be a whole number',
+      'number.min': 'Game intelligence rating must be at least 1',
+      'number.max': 'Game intelligence rating cannot exceed 10'
+    }),
+
+  workEthic: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Work ethic assessment is required',
+      'number.base': 'Work ethic must be a number',
+      'number.integer': 'Work ethic must be a whole number',
+      'number.min': 'Work ethic rating must be at least 1',
+      'number.max': 'Work ethic rating cannot exceed 10'
+    }),
+
+  physicalFitness: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Physical fitness assessment is required',
+      'number.base': 'Physical fitness must be a number',
+      'number.integer': 'Physical fitness must be a whole number',
+      'number.min': 'Physical fitness rating must be at least 1',
+      'number.max': 'Physical fitness rating cannot exceed 10'
+    }),
+
+  leadership: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Leadership assessment is required',
+      'number.base': 'Leadership must be a number',
+      'number.integer': 'Leadership must be a whole number',
+      'number.min': 'Leadership rating must be at least 1',
+      'number.max': 'Leadership rating cannot exceed 10'
+    }),
+
+  // ========================
+  // SCORE GLOBAL CALCULÉ AUTOMATIQUEMENT
+  // ========================
+
+  overallScore: Joi.number()
+    .integer()
+    .min(1)
+    .max(10)
+    .required()
+    .messages({
+      'any.required': 'Overall score is required',
+      'number.base': 'Overall score must be a number',
+      'number.integer': 'Overall score must be a whole number',
+      'number.min': 'Overall score must be at least 1',
+      'number.max': 'Overall score cannot exceed 10'
+    }),
+
+  // ========================
+  // CHAMPS MÉTIER ET DISPONIBILITÉ
+  // ========================
+
   availableToTransfer: Joi.boolean()
     .required()
     .messages({
-      'any.required': 'Please specify if the player is available for transfer',
-      'boolean.base': 'Transfer availability must be yes or no'
+      'any.required': 'Transfer availability status is required',
+      'boolean.base': 'Transfer availability must be true or false'
     }),
 
-  // ✅ CORRIGÉ : INTEGER pour correspondre au modèle Sequelize
   expectedGraduationDate: Joi.number()
     .integer()
-    .min(new Date().getFullYear()) 
-    .max(new Date().getFullYear() + 6)
+    .min(2024)
+    .max(2030)
     .required()
     .messages({
       'any.required': 'Expected graduation year is required',
-      'number.base': 'Graduation year must be a valid year',
-      'number.integer': 'Graduation year must be a valid year',
-      'number.min': 'Graduation year cannot be in the past',
-      'number.max': 'Graduation year cannot be more than 6 years in the future'
+      'number.base': 'Graduation year must be a number',
+      'number.integer': 'Graduation year must be a whole number',
+      'number.min': 'Graduation year cannot be before 2024',
+      'number.max': 'Graduation year cannot be after 2030'
     }),
 
   // ========================
-  // QUESTIONS OUVERTES ✅ LONGUEURS ALIGNÉES AVEC LE MODÈLE SEQUELIZE
+  // COMMENTAIRES TEXTUELS (VALIDATIONS STRICTES)
   // ========================
-  
-  roleInTeam: Joi.string()
-    .trim()
-    .min(5) // ✅ ALIGNÉ avec le modèle Sequelize
-    .max(500)
-    .required()
-    .messages({
-      'any.required': 'Player\'s role in team is required',
-      'string.base': 'Role description must be text',
-      'string.min': 'Please provide at least 5 characters for the role description',
-      'string.max': 'Role description must not exceed 500 characters'
-    }),
 
-  performanceLevel: Joi.string()
+  coachabilityComment: Joi.string()
     .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
-    .max(1000)
-    .required()
-    .messages({
-      'any.required': 'Performance level assessment is required',
-      'string.base': 'Performance level must be text',
-      'string.min': 'Please provide at least 10 characters for the performance level assessment',
-      'string.max': 'Performance level assessment must not exceed 1000 characters'
-    }),
-
-  playerStrengths: Joi.string()
-    .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
-    .max(1000)
-    .required()
-    .messages({
-      'any.required': 'Player strengths assessment is required',
-      'string.base': 'Player strengths must be text',
-      'string.min': 'Please provide at least 10 characters for the strengths assessment',
-      'string.max': 'Strengths assessment must not exceed 1000 characters'
-    }),
-
-  // ✅ GARDE LE NOM DU TEST mais mappe vers le modèle Sequelize
-  areasForImprovement: Joi.string()
-    .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
-    .max(1000)
-    .required()
-    .messages({
-      'any.required': 'Areas for improvement assessment is required',
-      'string.base': 'Areas for improvement must be text',
-      'string.min': 'Please provide at least 10 characters for the areas for improvement',
-      'string.max': 'Areas for improvement must not exceed 1000 characters'
-    }),
-
-  mentality: Joi.string()
-    .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
-    .max(500)
-    .required()
-    .messages({
-      'any.required': 'Mentality assessment is required',
-      'string.base': 'Mentality assessment must be text',
-      'string.min': 'Please provide at least 10 characters for the mentality assessment',
-      'string.max': 'Mentality assessment must not exceed 500 characters'
-    }),
-
-  coachability: Joi.string()
-    .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
+    .min(10)
     .max(500)
     .required()
     .messages({
@@ -113,7 +215,7 @@ const playerEvaluationSchema = Joi.object({
 
   technique: Joi.string()
     .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
+    .min(10)
     .max(500)
     .required()
     .messages({
@@ -125,7 +227,7 @@ const playerEvaluationSchema = Joi.object({
 
   physique: Joi.string()
     .trim()
-    .min(10) // ✅ ALIGNÉ avec le modèle Sequelize
+    .min(10)
     .max(500)
     .required()
     .messages({
@@ -135,13 +237,9 @@ const playerEvaluationSchema = Joi.object({
       'string.max': 'Physical assessment must not exceed 500 characters'
     }),
 
-  // ========================
-  // COMMENTAIRE FINAL (SYNTHÈSE ET RECOMMANDATIONS)
-  // ========================
-  
   coachFinalComment: Joi.string()
     .trim()
-    .min(20) // ✅ ALIGNÉ avec le modèle Sequelize
+    .min(20)
     .max(1500)
     .required()
     .messages({
@@ -158,7 +256,7 @@ const playerEvaluationSchema = Joi.object({
 });
 
 /**
- * ✅ MIDDLEWARE AVEC TRANSFORMATION DE CHAMPS
+ * ✅ MIDDLEWARE PRINCIPAL DE VALIDATION
  * 
  * Ce middleware transforme automatiquement les noms de champs des tests
  * vers les noms attendus par le modèle Sequelize.
@@ -190,7 +288,7 @@ const validatePlayerEvaluation = (req, res, next) => {
     });
   }
 
-  // ✅ TRANSFORMATION : Mapper areasForImprovement -> improvementAreas pour Sequelize
+  // ✅ TRANSFORMATION : Mapper areasForImprovement -> improvementAreas pour Sequelize (si nécessaire)
   if (value.areasForImprovement) {
     value.improvementAreas = value.areasForImprovement;
     delete value.areasForImprovement;
@@ -208,6 +306,9 @@ const validatePlayerEvaluation = (req, res, next) => {
   next();
 };
 
+/**
+ * ✅ MIDDLEWARE POUR LES MISES À JOUR D'ÉVALUATION
+ */
 const validatePlayerEvaluationUpdate = (req, res, next) => {
   const updateSchema = playerEvaluationSchema.fork(
     Object.keys(playerEvaluationSchema.describe().keys),
@@ -254,9 +355,5 @@ const validatePlayerEvaluationUpdate = (req, res, next) => {
 module.exports = {
   validatePlayerEvaluation,
   validatePlayerEvaluationUpdate,
-  playerEvaluationSchema,
-  playerEvaluationUpdateSchema: playerEvaluationSchema.fork(
-    Object.keys(playerEvaluationSchema.describe().keys),
-    schema => schema.optional()
-  )
+  playerEvaluationSchema
 };
