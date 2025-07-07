@@ -4,8 +4,8 @@ const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const NJCAACoachController = require('../controllers/njcaaCoachController');
-const { authenticate, requireNJCAACoachAccess } = require('../middleware/auth');
-const { generalAuthLimiter } = require('../middleware/rateLimiting'); // ✅ IMPORT CORRIGÉ : rateLimiting au lieu de rateLimiter
+const { authenticate, requireNJCAACoach } = require('../middleware/auth'); // ✅ NOM CORRIGÉ
+const { generalAuthLimiter } = require('../middleware/rateLimiting');
 const { validatePlayerEvaluation } = require('../middleware/playerEvaluationValidation');
 
 /**
@@ -49,7 +49,7 @@ const { validatePlayerEvaluation } = require('../middleware/playerEvaluationVali
  */
 router.get('/dashboard',
   authenticate,
-  requireNJCAACoachAccess,
+  requireNJCAACoach, // ✅ NOM CORRIGÉ
   generalAuthLimiter,
   NJCAACoachController.getDashboard
 );
@@ -68,7 +68,7 @@ router.get('/dashboard',
  */
 router.get('/settings',
   authenticate,
-  requireNJCAACoachAccess,
+  requireNJCAACoach, // ✅ NOM CORRIGÉ
   generalAuthLimiter,
   NJCAACoachController.getSettings
 );
@@ -83,7 +83,7 @@ router.get('/settings',
  */
 router.put('/settings',
   authenticate,
-  requireNJCAACoachAccess,
+  requireNJCAACoach, // ✅ NOM CORRIGÉ
   generalAuthLimiter,
   // Validation des données de mise à jour
   (req, res, next) => {
@@ -140,7 +140,7 @@ router.put('/settings',
  */
 router.get('/players/:playerId/evaluation',
   authenticate,
-  requireNJCAACoachAccess,
+  requireNJCAACoach, // ✅ NOM CORRIGÉ
   generalAuthLimiter,
   // VALIDATION DE PARAMÈTRE : Assurer que playerId est un nombre valide
   (req, res, next) => {
@@ -176,7 +176,7 @@ router.get('/players/:playerId/evaluation',
  */
 router.post('/players/:playerId/evaluation',
   authenticate,
-  requireNJCAACoachAccess,
+  requireNJCAACoach, // ✅ NOM CORRIGÉ
   generalAuthLimiter, // Note : Pas de rate limiting trop restrictif pour les évaluations
   // Validation du paramètre playerId
   (req, res, next) => {
@@ -214,7 +214,7 @@ router.post('/players/:playerId/evaluation',
  */
 router.get('/evaluation-history',
   authenticate,
-  requireNJCAACoachAccess,
+  requireNJCAACoach, // ✅ NOM CORRIGÉ
   generalAuthLimiter,
   NJCAACoachController.getEvaluationHistory
 );
