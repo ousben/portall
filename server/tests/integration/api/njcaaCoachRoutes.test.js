@@ -9,21 +9,6 @@ const { User, NJCAACoachProfile, NJCAACollege, PlayerProfile, PlayerEvaluation }
 const { sequelize } = models;
 const AuthService = require('../../../services/authService');
 
-/**
- * 🧪 Tests d'intégration pour les routes des coachs NJCAA
- * 
- * Ces tests vérifient que votre API fonctionne correctement dans des conditions
- * réalistes, en testant l'intégration entre vos routes, contrôleurs, middleware
- * d'authentification, et base de données.
- * 
- * 🎯 Ce que nous testons :
- * - Authentification et autorisation des endpoints
- * - Logique métier de filtrage des joueurs
- * - Système d'évaluation complet
- * - Gestion des erreurs et cas limites
- * - Sécurité des accès
- */
-
 describe('🏟️ NJCAA Coach Routes Integration Tests', () => {
   let testNJCAACoach;
   let testNJCAACollege;
@@ -31,7 +16,6 @@ describe('🏟️ NJCAA Coach Routes Integration Tests', () => {
   let testFemalePlayer;
   let authToken;
 
-  // Configuration avant tous les tests
   beforeAll(async () => {
     // Créer un college NJCAA de test
     testNJCAACollege = await NJCAACollege.create({
@@ -150,7 +134,6 @@ describe('🏟️ NJCAA Coach Routes Integration Tests', () => {
 
       const players = response.body.data.players;
       
-      // Le coach masculin ne devrait voir que le joueur masculin
       expect(players).toHaveLength(1);
       expect(players[0].gender).toBe('male');
       expect(players[0].collegeId).toBe(testNJCAACollege.id);
@@ -159,18 +142,19 @@ describe('🏟️ NJCAA Coach Routes Integration Tests', () => {
 
   describe('📝 Player Evaluation System', () => {
     test('Should create new player evaluation successfully', async () => {
+      // ✅ DONNÉES CORRIGÉES : Respectent maintenant les longueurs minimales du modèle
       const evaluationData = {
         availableToTransfer: true,
-        roleInTeam: 'Starting midfielder',
-        expectedGraduationDate: '2026',
-        performanceLevel: 'Division II ready',
-        playerStrengths: 'Excellent ball control and vision',
-        areasForImprovement: 'Defensive positioning',
-        mentality: 'Very competitive and focused',
-        coachability: 'Excellent, always listens and applies feedback',
-        technique: 'Above average first touch and passing',
-        physique: 'Good pace and endurance',
-        coachFinalComment: 'Promising player with great potential'
+        roleInTeam: 'Starting central midfielder with creative responsibilities',
+        expectedGraduationDate: 2026, // ✅ NUMBER au lieu de string
+        performanceLevel: 'Division II ready with potential for higher levels with development',
+        playerStrengths: 'Excellent ball control and vision with strong technical abilities and game intelligence',
+        areasForImprovement: 'Defensive positioning and work rate need improvement, particularly in transition phases',
+        mentality: 'Very competitive and focused player with excellent attitude and leadership qualities',
+        coachability: 'Excellent, always listens and applies feedback effectively with great willingness to learn',
+        technique: 'Above average first touch and passing with good shooting technique and ball striking ability',
+        physique: 'Good pace and endurance with room for strength development in upper body areas',
+        coachFinalComment: 'Promising player with great potential for development at the next level and strong character'
       };
 
       const response = await request(app)
@@ -184,18 +168,19 @@ describe('🏟️ NJCAA Coach Routes Integration Tests', () => {
     });
 
     test('Should prevent evaluation of wrong gender players', async () => {
+      // ✅ DONNÉES CORRIGÉES : Respectent les longueurs minimales mais pour test d'accès refusé
       const evaluationData = {
         availableToTransfer: true,
-        roleInTeam: 'Test',
-        expectedGraduationDate: '2025',
-        performanceLevel: 'Test',
-        playerStrengths: 'Test',
-        areasForImprovement: 'Test',
-        mentality: 'Test',
-        coachability: 'Test',
-        technique: 'Test',
-        physique: 'Test',
-        coachFinalComment: 'Test'
+        roleInTeam: 'Test player role with sufficient length for validation requirements',
+        expectedGraduationDate: 2025, // ✅ NUMBER au lieu de string
+        performanceLevel: 'Test performance level assessment with minimum required character length',
+        playerStrengths: 'Test player strengths assessment with adequate length for validation',
+        areasForImprovement: 'Test areas for improvement with minimum character requirements met',
+        mentality: 'Test mentality assessment with sufficient character length for validation',
+        coachability: 'Test coachability assessment meeting minimum length requirements',
+        technique: 'Test technique assessment with adequate character length for validation',
+        physique: 'Test physical assessment with minimum required character length',
+        coachFinalComment: 'Test final comment with sufficient length to meet validation requirements'
       };
 
       const response = await request(app)
@@ -206,5 +191,9 @@ describe('🏟️ NJCAA Coach Routes Integration Tests', () => {
       expect(response.status).toBe(403);
       expect(response.body.code).toBe('EVALUATION_ACCESS_DENIED');
     });
+  });
+
+  afterAll(async () => {
+    await sequelize.close();
   });
 });
