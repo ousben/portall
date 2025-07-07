@@ -1,29 +1,41 @@
 // portall/server/controllers/coachController.js
 
-const { User, CoachProfile, PlayerProfile, NCAACollege, NJCAACollege } = require('../models');
+const { User, CoachProfile, PlayerProfile, NCAACollege, CoachFavorite } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database.connection');
 
 /**
- * Contrôleur pour la gestion des coachs NCAA/NAIA avec dashboards et fonctionnalités de recrutement
+ * 🏟️ Contrôleur pour la gestion des coachs NCAA/NAIA avec leurs fonctionnalités complètes
  * 
- * Ce contrôleur est plus complexe que PlayerController car les coachs ont des besoins métier
- * sophistiqués : recherche de talents, gestion de favoris, analytics de recrutement, etc.
+ * ARCHITECTURE MÉTIER : Ce contrôleur gère le workflow complet des coachs NCAA/NAIA
+ * qui recherchent et recrutent des joueurs NJCAA. Contrairement aux coachs NJCAA
+ * qui évaluent leurs propres joueurs, ces coachs paient des abonnements pour
+ * accéder à une base de données de talents.
  * 
- * Analogie métier : Si PlayerController gère un "casier d'athlète", CoachController gère
- * un "bureau de recrutement professionnel" avec des outils spécialisés pour découvrir,
- * évaluer, organiser et suivre les prospects.
+ * 🎯 Fonctionnalités principales :
+ * 1. Dashboard avec métriques de recrutement
+ * 2. Système de favoris pour sauvegarder les joueurs intéressants
+ * 3. Recherches sauvegardées avec critères personnalisés
+ * 4. Analytics pour optimiser les stratégies de recrutement
+ * 5. Gestion du profil personnel
  * 
- * Architecture suivie : Même patterns que votre AuthController et AdminController
- * - Try-catch systématique avec logging détaillé
- * - Transactions pour les opérations critiques
- * - Format de réponse standardisé
- * - Validation des permissions et ownership
- * - Gestion d'erreurs contextuelle
+ * 💡 Concept pédagogique : Ce contrôleur illustre la différence entre
+ * "consommateurs de données" (coachs NCAA/NAIA) et "producteurs de données"
+ * (coachs NJCAA). Chaque type a son propre workflow optimisé.
  */
 class CoachController {
   /**
-   * 📊 Dashboard principal du coach - Centre de commandement du recrutement
+   * 📊 Dashboard principal du coach NCAA/NAIA
+   * 
+   * Cette méthode fournit une vue d'ensemble de l'activité de recrutement
+   * du coach avec des métriques clés et des recommandations personnalisées.
+   * 
+   * 🎯 Données retournées :
+   * - Profil complet du coach avec college
+   * - Statistiques d'activité (recherches, favoris, vues)
+   * - Joueurs favoris récents
+   * - Recommandations d'optimisation
+   * - Tendances et analytics
    */
   static async getDashboard(req, res) {
     try {
@@ -31,14 +43,14 @@ class CoachController {
       
       console.log(`📊 Loading coach dashboard for: ${req.user.email}`);
 
-      // Récupération du profil complet avec relations
+      // Récupération du profil complet avec college
       const coachProfile = await CoachProfile.findOne({
         where: { userId: userId },
         include: [
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'isActive', 'createdAt', 'lastLogin']
+            attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt']
           },
           {
             model: NCAACollege,
@@ -56,70 +68,70 @@ class CoachController {
         });
       }
 
-      // CORRECTION : Utilisation directe de la classe au lieu de 'this'
-      const recentFavorites = await CoachController.getRecentFavorites(coachProfile.id, 5);
-      const topSavedSearches = await CoachController.getTopSavedSearches(coachProfile.id, 3);
-      const recruitingStats = await CoachController.calculateRecruitingStats(coachProfile.id);
-      const recentActivity = await CoachController.getCoachRecentActivity(coachProfile.id);
-      const recommendations = await CoachController.generateCoachRecommendations(coachProfile);
-
-      // Construction de la réponse dashboard complète
-      const dashboardData = {
-        profile: {
-          ...coachProfile.toJSON(),
-          profileCompleteness: CoachController.calculateCoachProfileCompleteness(coachProfile)
-        },
-        recruiting: {
-          recentFavorites: recentFavorites,
-          savedSearches: topSavedSearches,
-          statistics: recruitingStats
-        },
-        activity: recentActivity,
-        recommendations: recommendations,
-        quickActions: CoachController.generateQuickActions(coachProfile),
-        lastUpdated: new Date()
+      // 📈 Calculer les métriques d'activité
+      const activityMetrics = {
+        totalSearches: coachProfile.totalSearches || 0,
+        savedSearches: (coachProfile.savedSearches || []).length,
+        totalFavorites: await CoachController.getFavoritesSummary(coachProfile.id),
+        profileViews: coachProfile.profileViews || 0,
+        lastActivity: coachProfile.lastSearchDate || coachProfile.updatedAt
       };
 
-      console.log(`✅ Coach dashboard loaded successfully for: ${req.user.email}`);
-      console.log(`   College: ${coachProfile.college?.name || 'No college assigned'}`);
-      console.log(`   Position: ${coachProfile.position}`);
-      console.log(`   Division: ${coachProfile.division}`);
-      console.log(`   Total favorites: ${recruitingStats.totalFavorites || 0}`);
+      // 🎯 Générer des recommandations personnalisées
+      const recommendations = await CoachController.generateCoachRecommendations(coachProfile);
 
-      return res.status(200).json({
+      // ⭐ Récupérer les favoris récents (5 derniers)
+      const recentFavorites = await CoachController.getRecentFavorites(coachProfile.id, 5);
+
+      console.log(`✅ Dashboard loaded successfully for coach ${userId}`);
+
+      return res.json({
         status: 'success',
-        message: 'Coach dashboard retrieved successfully',
-        data: dashboardData
+        data: {
+          coach: {
+            profile: coachProfile.toJSON(),
+            college: coachProfile.college,
+            user: coachProfile.user
+          },
+          metrics: activityMetrics,
+          recentFavorites: recentFavorites,
+          recommendations: recommendations,
+          metadata: {
+            lastUpdated: new Date(),
+            dashboardVersion: '2.0',
+            isSubscriptionActive: true // TODO: Vérifier l'abonnement Stripe
+          }
+        }
       });
 
     } catch (error) {
-      console.error(`❌ Error loading coach dashboard for ${req.user.email}:`, error);
-      
+      console.error('Coach dashboard error:', error);
       return res.status(500).json({
         status: 'error',
-        message: 'Failed to load coach dashboard',
-        code: 'COACH_DASHBOARD_ERROR',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+        message: 'Failed to load dashboard',
+        code: 'DASHBOARD_ERROR'
       });
     }
   }
 
   /**
-   * 👤 Profil public d'un coach (pour joueurs et autres coachs)
+   * 👤 Profil public d'un coach spécifique
+   * 
+   * Cette méthode permet de consulter le profil d'un coach.
+   * Utilisée par les admins et dans les fonctionnalités de networking.
    */
   static async getCoachProfile(req, res) {
     try {
       const { coachId } = req.params;
-      const viewerUser = req.user;
       
-      console.log(`👤 Loading coach profile ${coachId} for viewer: ${viewerUser.email}`);
+      console.log(`👤 Loading coach profile: ${coachId}`);
 
       const coachProfile = await CoachProfile.findByPk(coachId, {
         include: [
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email']
+            attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt']
           },
           {
             model: NCAACollege,
@@ -132,42 +144,49 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_NOT_FOUND'
         });
       }
 
-      // Vérifications de permissions
-      const isOwnProfile = viewerUser.id === coachProfile.userId;
-      const isAdmin = viewerUser.userType === 'admin';
-
-      const profileData = {
-        ...coachProfile.toJSON(),
-        isOwnProfile: isOwnProfile,
-        canEdit: isOwnProfile || isAdmin,
-        viewerType: viewerUser.userType
+      // Données publiques seulement
+      const publicProfile = {
+        id: coachProfile.id,
+        position: coachProfile.position,
+        teamSport: coachProfile.teamSport,
+        division: coachProfile.division,
+        college: coachProfile.college,
+        user: {
+          firstName: coachProfile.user.firstName,
+          lastName: coachProfile.user.lastName,
+          joinedDate: coachProfile.user.createdAt
+        },
+        totalSearches: coachProfile.totalSearches,
+        memberSince: coachProfile.createdAt
       };
 
-      return res.status(200).json({
+      return res.json({
         status: 'success',
-        message: 'Coach profile retrieved successfully',
         data: {
-          profile: profileData
+          coach: publicProfile
         }
       });
 
     } catch (error) {
-      console.error(`❌ Error retrieving coach profile ${req.params.coachId}:`, error);
-      
+      console.error('Get coach profile error:', error);
       return res.status(500).json({
         status: 'error',
-        message: 'Failed to retrieve coach profile',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+        message: 'Failed to load coach profile',
+        code: 'GET_PROFILE_ERROR'
       });
     }
   }
 
   /**
    * 📈 Analytics détaillées du coach
+   * 
+   * Cette méthode fournit des analytics avancées pour aider le coach
+   * à optimiser ses stratégies de recrutement.
    */
   static async getCoachAnalytics(req, res) {
     try {
@@ -182,18 +201,25 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
         });
       }
 
-      // Calcul des métriques détaillées de recrutement
+      // 📊 Calculer les analytics détaillées
       const analytics = {
         searchMetrics: {
           totalSearches: coachProfile.totalSearches || 0,
           weeklyAverage: await CoachController.calculateWeeklySearchAverage(coachProfile.id),
-          mostUsedFilters: await CoachController.analyzeMostUsedFilters(coachProfile.savedSearches || [])
+          mostUsedFilters: await CoachController.analyzeMostUsedFilters(coachProfile.savedSearches || []),
+          savedSearches: (coachProfile.savedSearches || []).length
         },
         favoritesMetrics: await CoachController.calculateFavoritesMetrics(coachProfile.id),
+        recruitingEfficiency: CoachController.calculateRecruitingEfficiency(
+          { totalSearches: coachProfile.totalSearches || 0 },
+          await CoachController.calculateFavoritesMetrics(coachProfile.id)
+        ),
+        engagementScore: await CoachController.calculateEngagementScore(coachProfile.id),
         activityPatterns: await CoachController.analyzeActivityPatterns(coachProfile.id),
         recommendations: await CoachController.generateOptimizationRecommendations(coachProfile)
       };
@@ -217,6 +243,9 @@ class CoachController {
 
   /**
    * ✏️ Mise à jour du profil coach
+   * 
+   * Permet au coach de modifier certains champs de son profil.
+   * Certains champs nécessitent une validation admin.
    */
   static async updateCoachProfile(req, res) {
     try {
@@ -232,13 +261,24 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
         });
       }
 
-      // Mise à jour des champs autorisés
+      // 🔒 Champs modifiables sans validation admin
+      const allowedFields = ['phoneNumber', 'bio', 'recruitingPreferences'];
+      const filteredData = {};
+      
+      allowedFields.forEach(field => {
+        if (updateData[field] !== undefined) {
+          filteredData[field] = updateData[field];
+        }
+      });
+
+      // Mise à jour avec timestamp
       const updatedProfile = await coachProfile.update({
-        ...updateData,
+        ...filteredData,
         lastProfileUpdate: new Date()
       });
 
@@ -248,12 +288,24 @@ class CoachController {
         status: 'success',
         message: 'Coach profile updated successfully',
         data: {
-          profile: updatedProfile
+          profile: updatedProfile.toJSON(),
+          updatedFields: Object.keys(filteredData)
         }
       });
 
     } catch (error) {
       console.error(`❌ Error updating coach profile for ${req.user.email}:`, error);
+      
+      if (error.name === 'SequelizeValidationError') {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Validation error in profile data',
+          errors: error.errors.map(err => ({
+            field: err.path,
+            message: err.message
+          }))
+        });
+      }
       
       return res.status(500).json({
         status: 'error',
@@ -264,222 +316,16 @@ class CoachController {
   }
 
   /**
-   * ⭐ Ajouter un joueur aux favoris
-   */
-  static async addToFavorites(req, res) {
-    try {
-      const { playerId } = req.params;
-      const userId = req.user.id;
-      const { priority = 'medium', notes = '', status = 'interested' } = req.body;
-
-      console.log(`⭐ Adding player ${playerId} to favorites for coach: ${req.user.email}`);
-
-      const coachProfile = await CoachProfile.findOne({
-        where: { userId: userId }
-      });
-
-      if (!coachProfile) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Coach profile not found'
-        });
-      }
-
-      // Vérifier que le joueur existe
-      const playerProfile = await PlayerProfile.findByPk(playerId);
-      if (!playerProfile) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Player not found'
-        });
-      }
-
-      // Gestion des favoris dans un champ JSON
-      const currentFavorites = coachProfile.favoriteProfiles || [];
-      
-      // Vérifier si déjà en favoris
-      const existingFavoriteIndex = currentFavorites.findIndex(fav => fav.playerId == playerId);
-      
-      if (existingFavoriteIndex >= 0) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Player already in favorites'
-        });
-      }
-
-      // Ajouter aux favoris
-      const newFavorite = {
-        playerId: parseInt(playerId),
-        priority: priority,
-        notes: notes,
-        status: status,
-        addedAt: new Date(),
-        lastUpdated: new Date()
-      };
-
-      currentFavorites.push(newFavorite);
-
-      await coachProfile.update({
-        favoriteProfiles: currentFavorites
-      });
-
-      console.log(`✅ Player ${playerId} added to favorites for coach ${req.user.email}`);
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Player added to favorites successfully',
-        data: {
-          favorite: newFavorite,
-          totalFavorites: currentFavorites.length
-        }
-      });
-
-    } catch (error) {
-      console.error(`❌ Error adding to favorites for coach ${req.user.email}:`, error);
-      
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to add player to favorites',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
-      });
-    }
-  }
-
-  /**
-   * 🗑️ Retirer un joueur des favoris
-   */
-  static async removeFromFavorites(req, res) {
-    try {
-      const { playerId } = req.params;
-      const userId = req.user.id;
-
-      console.log(`🗑️ Removing player ${playerId} from favorites for coach: ${req.user.email}`);
-
-      const coachProfile = await CoachProfile.findOne({
-        where: { userId: userId }
-      });
-
-      if (!coachProfile) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Coach profile not found'
-        });
-      }
-
-      const currentFavorites = coachProfile.favoriteProfiles || [];
-      const updatedFavorites = currentFavorites.filter(fav => fav.playerId != playerId);
-
-      if (currentFavorites.length === updatedFavorites.length) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Player not found in favorites'
-        });
-      }
-
-      await coachProfile.update({
-        favoriteProfiles: updatedFavorites
-      });
-
-      console.log(`✅ Player ${playerId} removed from favorites for coach ${req.user.email}`);
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Player removed from favorites successfully',
-        data: {
-          removedPlayerId: playerId,
-          totalFavorites: updatedFavorites.length
-        }
-      });
-
-    } catch (error) {
-      console.error(`❌ Error removing from favorites for coach ${req.user.email}:`, error);
-      
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to remove player from favorites',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
-      });
-    }
-  }
-
-  /**
-   * 🔄 NOUVELLE MÉTHODE : Mettre à jour le statut d'un favori
-   * Cette méthode était manquante et causait l'erreur Express !
-   */
-  static async updateFavoriteStatus(req, res) {
-    try {
-      const { playerId } = req.params;
-      const userId = req.user.id;
-      const updateData = req.body;
-
-      console.log(`🔄 Updating favorite status for player ${playerId} by coach: ${req.user.email}`);
-
-      const coachProfile = await CoachProfile.findOne({
-        where: { userId: userId }
-      });
-
-      if (!coachProfile) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Coach profile not found'
-        });
-      }
-
-      const currentFavorites = coachProfile.favoriteProfiles || [];
-      const favoriteIndex = currentFavorites.findIndex(fav => fav.playerId == playerId);
-
-      if (favoriteIndex === -1) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Player not found in favorites'
-        });
-      }
-
-      // Mettre à jour le favori
-      const updatedFavorite = {
-        ...currentFavorites[favoriteIndex],
-        ...updateData,
-        lastUpdated: new Date()
-      };
-
-      currentFavorites[favoriteIndex] = updatedFavorite;
-
-      await coachProfile.update({
-        favoriteProfiles: currentFavorites
-      });
-
-      console.log(`✅ Favorite status updated for player ${playerId} by coach ${req.user.email}`);
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Favorite status updated successfully',
-        data: {
-          playerId: playerId,
-          updatedFavorite: updatedFavorite,
-          updatedAt: new Date()
-        }
-      });
-
-    } catch (error) {
-      console.error(`❌ Error updating favorite status for coach ${req.user.email}:`, error);
-      
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to update favorite status',
-        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
-      });
-    }
-  }
-
-  /**
-   * 📋 Récupérer la liste des favoris
+   * ⭐ Récupérer la liste des joueurs favoris
+   * 
+   * Cette méthode retourne tous les joueurs sauvegardés par le coach
+   * avec leurs informations détaillées et notes personnelles.
    */
   static async getFavoriteProfiles(req, res) {
     try {
       const userId = req.user.id;
-      const { status, priority, page = 1, limit = 20 } = req.query;
-
-      console.log(`📋 Loading favorites for coach: ${req.user.email}`);
+      
+      console.log(`⭐ Loading favorites for coach: ${req.user.email}`);
 
       const coachProfile = await CoachProfile.findOne({
         where: { userId: userId }
@@ -488,61 +334,56 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
         });
       }
 
-      let favorites = coachProfile.favoriteProfiles || [];
-
-      // Filtrage optionnel
-      if (status) {
-        favorites = favorites.filter(fav => fav.status === status);
+      // Récupérer les favoris depuis le champ JSON
+      const favoriteIds = (coachProfile.favoriteProfiles || []).map(fav => fav.playerId);
+      
+      if (favoriteIds.length === 0) {
+        return res.json({
+          status: 'success',
+          data: {
+            favorites: [],
+            total: 0,
+            message: 'No favorite players yet'
+          }
+        });
       }
-      if (priority) {
-        favorites = favorites.filter(fav => fav.priority === priority);
-      }
 
-      // Pagination
-      const startIndex = (parseInt(page) - 1) * parseInt(limit);
-      const endIndex = startIndex + parseInt(limit);
-      const paginatedFavorites = favorites.slice(startIndex, endIndex);
-
-      // Enrichir avec les données des joueurs
-      const enrichedFavorites = await Promise.all(
-        paginatedFavorites.map(async (fav) => {
-          const playerProfile = await PlayerProfile.findByPk(fav.playerId, {
-            include: [
-              {
-                model: User,
-                as: 'user',
-                attributes: ['id', 'firstName', 'lastName', 'email']
-              },
-              {
-                model: NJCAACollege,
-                as: 'college',
-                attributes: ['id', 'name', 'state', 'region']
-              }
-            ]
-          });
-
-          return {
-            favorite: fav,
-            player: playerProfile ? playerProfile.toJSON() : null
-          };
-        })
-      );
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Favorite profiles retrieved successfully',
-        data: {
-          favorites: enrichedFavorites.filter(item => item.player !== null),
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total: favorites.length,
-            totalPages: Math.ceil(favorites.length / parseInt(limit))
+      // Récupérer les profils complets des joueurs favoris
+      const favoriteProfiles = await PlayerProfile.findAll({
+        where: { id: { [Op.in]: favoriteIds } },
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'firstName', 'lastName', 'email']
           },
+          {
+            model: NCAACollege,
+            as: 'college',
+            attributes: ['id', 'name', 'state']
+          }
+        ]
+      });
+
+      // Enrichir avec les données de favoris (notes, priorité, etc.)
+      const enrichedFavorites = favoriteProfiles.map(player => {
+        const favoriteData = coachProfile.favoriteProfiles.find(fav => fav.playerId === player.id);
+        return {
+          ...player.toJSON(),
+          favoriteInfo: favoriteData || {}
+        };
+      });
+
+      return res.json({
+        status: 'success',
+        data: {
+          favorites: enrichedFavorites,
+          total: enrichedFavorites.length,
           summary: await CoachController.getFavoritesSummary(coachProfile.id)
         }
       });
@@ -559,12 +400,268 @@ class CoachController {
   }
 
   /**
-   * 💾 NOUVELLE MÉTHODE : Récupérer les recherches sauvegardées
+   * ⭐ Ajouter un joueur aux favoris
+   * 
+   * Cette méthode permet au coach de sauvegarder un joueur intéressant
+   * avec des notes personnelles et un niveau de priorité.
+   */
+  static async addToFavorites(req, res) {
+    try {
+      const { playerId } = req.params;
+      const userId = req.user.id;
+      const { priority = 'medium', notes = '', status = 'interested' } = req.body;
+
+      console.log(`⭐ Adding player ${playerId} to favorites for coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
+        });
+      }
+
+      // Vérifier que le joueur existe et est visible
+      const playerProfile = await PlayerProfile.findOne({
+        where: { 
+          id: playerId,
+          isProfileVisible: true
+        },
+        include: [{
+          model: User,
+          as: 'user',
+          where: { isActive: true }
+        }]
+      });
+
+      if (!playerProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Player not found or not available',
+          code: 'PLAYER_NOT_FOUND'
+        });
+      }
+
+      // Gérer les favoris dans le champ JSON
+      const currentFavorites = coachProfile.favoriteProfiles || [];
+      
+      // Vérifier si déjà en favoris
+      const existingFavoriteIndex = currentFavorites.findIndex(fav => fav.playerId == playerId);
+      
+      if (existingFavoriteIndex >= 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Player already in favorites',
+          code: 'ALREADY_FAVORITE'
+        });
+      }
+
+      // Créer le nouvel objet favori
+      const newFavorite = {
+        playerId: parseInt(playerId),
+        priority: priority,
+        notes: notes,
+        status: status,
+        addedAt: new Date(),
+        lastUpdated: new Date(),
+        playerName: `${playerProfile.user.firstName} ${playerProfile.user.lastName}`
+      };
+
+      // Ajouter aux favoris
+      currentFavorites.push(newFavorite);
+
+      // Sauvegarder en base
+      await coachProfile.update({
+        favoriteProfiles: currentFavorites
+      });
+
+      console.log(`✅ Player ${playerId} added to favorites for coach ${req.user.email}`);
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Player added to favorites successfully',
+        data: {
+          favorite: newFavorite,
+          totalFavorites: currentFavorites.length,
+          player: {
+            id: playerProfile.id,
+            name: `${playerProfile.user.firstName} ${playerProfile.user.lastName}`,
+            position: playerProfile.position,
+            college: playerProfile.college?.name
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error adding to favorites for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to add player to favorites',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * 🗑️ Retirer un joueur des favoris
+   * 
+   * Cette méthode permet au coach de supprimer un joueur de sa liste de favoris.
+   */
+  static async removeFromFavorites(req, res) {
+    try {
+      const { playerId } = req.params;
+      const userId = req.user.id;
+
+      console.log(`🗑️ Removing player ${playerId} from favorites for coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
+        });
+      }
+
+      // Récupérer les favoris actuels
+      const currentFavorites = coachProfile.favoriteProfiles || [];
+      
+      // Trouver l'index du favori à supprimer
+      const favoriteIndex = currentFavorites.findIndex(fav => fav.playerId == playerId);
+      
+      if (favoriteIndex === -1) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Player not found in favorites',
+          code: 'NOT_IN_FAVORITES'
+        });
+      }
+
+      // Supprimer le favori
+      const removedFavorite = currentFavorites.splice(favoriteIndex, 1)[0];
+
+      // Sauvegarder en base
+      await coachProfile.update({
+        favoriteProfiles: currentFavorites
+      });
+
+      console.log(`✅ Player ${playerId} removed from favorites for coach ${req.user.email}`);
+
+      return res.json({
+        status: 'success',
+        message: 'Player removed from favorites successfully',
+        data: {
+          removedFavorite: removedFavorite,
+          totalFavorites: currentFavorites.length
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error removing from favorites for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to remove player from favorites',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * ✏️ Mettre à jour les informations d'un favori
+   * 
+   * Cette méthode permet au coach de modifier ses notes, la priorité
+   * ou le statut d'un joueur dans ses favoris.
+   */
+  static async updateFavoriteStatus(req, res) {
+    try {
+      const { playerId } = req.params;
+      const userId = req.user.id;
+      const { priority, notes, status } = req.body;
+
+      console.log(`✏️ Updating favorite status for player ${playerId} by coach: ${req.user.email}`);
+
+      const coachProfile = await CoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
+        });
+      }
+
+      // Récupérer les favoris actuels
+      const currentFavorites = coachProfile.favoriteProfiles || [];
+      
+      // Trouver le favori à mettre à jour
+      const favoriteIndex = currentFavorites.findIndex(fav => fav.playerId == playerId);
+      
+      if (favoriteIndex === -1) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Player not found in favorites',
+          code: 'NOT_IN_FAVORITES'
+        });
+      }
+
+      // Mettre à jour les champs fournis
+      const updatedFavorite = { ...currentFavorites[favoriteIndex] };
+      
+      if (priority !== undefined) updatedFavorite.priority = priority;
+      if (notes !== undefined) updatedFavorite.notes = notes;
+      if (status !== undefined) updatedFavorite.status = status;
+      updatedFavorite.lastUpdated = new Date();
+
+      // Remplacer dans le tableau
+      currentFavorites[favoriteIndex] = updatedFavorite;
+
+      // Sauvegarder en base
+      await coachProfile.update({
+        favoriteProfiles: currentFavorites
+      });
+
+      console.log(`✅ Favorite status updated for player ${playerId} by coach ${req.user.email}`);
+
+      return res.json({
+        status: 'success',
+        message: 'Favorite status updated successfully',
+        data: {
+          updatedFavorite: updatedFavorite
+        }
+      });
+
+    } catch (error) {
+      console.error(`❌ Error updating favorite status for coach ${req.user.email}:`, error);
+      
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to update favorite status',
+        ...(process.env.NODE_ENV === 'development' && { debug: error.message })
+      });
+    }
+  }
+
+  /**
+   * 💾 Récupérer les recherches sauvegardées
+   * 
+   * Cette méthode retourne toutes les recherches que le coach a sauvegardées
+   * pour un accès rapide à ses critères de recrutement favoris.
    */
   static async getSavedSearches(req, res) {
     try {
       const userId = req.user.id;
-
+      
       console.log(`💾 Loading saved searches for coach: ${req.user.email}`);
 
       const coachProfile = await CoachProfile.findOne({
@@ -574,37 +671,20 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
         });
       }
 
-      // Les recherches sont stockées dans le champ JSON savedSearches
       const savedSearches = coachProfile.savedSearches || [];
 
-      // Enrichir avec des métadonnées utiles
-      const enrichedSearches = savedSearches.map((search, index) => ({
-        id: search.id || index,
-        name: search.name || `Search ${index + 1}`,
-        criteria: search.criteria || search,
-        createdAt: search.savedAt || search.createdAt || new Date(),
-        lastUsed: search.lastUsed || null,
-        useCount: search.useCount || 0
-      }));
-
-      // Trier par date de création (plus récent en premier)
-      enrichedSearches.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-      return res.status(200).json({
+      return res.json({
         status: 'success',
-        message: 'Saved searches retrieved successfully',
         data: {
-          searches: enrichedSearches,
-          totalCount: enrichedSearches.length,
-          summary: {
-            totalSearches: coachProfile.totalSearches || 0,
-            savedSearches: enrichedSearches.length,
-            mostRecentSearch: enrichedSearches.length > 0 ? enrichedSearches[0].createdAt : null
-          }
+          searches: savedSearches,
+          total: savedSearches.length,
+          lastCreated: savedSearches.length > 0 ? 
+            Math.max(...savedSearches.map(s => new Date(s.createdAt).getTime())) : null
         }
       });
 
@@ -620,14 +700,17 @@ class CoachController {
   }
 
   /**
-   * ➕ NOUVELLE MÉTHODE : Sauvegarder une nouvelle recherche
+   * 💾 Sauvegarder une nouvelle recherche
+   * 
+   * Cette méthode permet au coach de sauvegarder ses critères de recherche
+   * pour pouvoir les réutiliser facilement plus tard.
    */
   static async saveSearch(req, res) {
     try {
       const userId = req.user.id;
-      const searchData = req.body;
+      const { name, criteria, description = '' } = req.body;
 
-      console.log(`➕ Saving new search for coach: ${req.user.email}`);
+      console.log(`💾 Saving search for coach: ${req.user.email} - ${name}`);
 
       const coachProfile = await CoachProfile.findOne({
         where: { userId: userId }
@@ -636,58 +719,71 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
         });
       }
 
-      // Récupérer les recherches existantes
       const currentSearches = coachProfile.savedSearches || [];
 
-      // Créer la nouvelle recherche avec métadonnées
-      const newSearch = {
-        id: Date.now(), // ID simple basé sur timestamp
-        name: searchData.name || `Search ${currentSearches.length + 1}`,
-        criteria: {
-          gender: searchData.gender,
-          collegeState: searchData.collegeState,
-          collegeRegion: searchData.collegeRegion,
-          profileStatus: searchData.profileStatus,
-          minViews: searchData.minViews,
-          sortBy: searchData.sortBy,
-          sortOrder: searchData.sortOrder
-        },
-        savedAt: new Date(),
-        lastUsed: null,
-        useCount: 0
-      };
-
-      // Ajouter la nouvelle recherche
-      const updatedSearches = [...currentSearches, newSearch];
-
-      // Garder seulement les 20 recherches les plus récentes
-      if (updatedSearches.length > 20) {
-        updatedSearches.splice(0, updatedSearches.length - 20);
+      // Vérifier que le nom n'existe pas déjà
+      if (currentSearches.some(search => search.name === name)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'A search with this name already exists',
+          code: 'SEARCH_NAME_EXISTS'
+        });
       }
 
-      // Mettre à jour le profil
+      // Créer la nouvelle recherche
+      const newSearch = {
+        id: Date.now().toString(), // ID simple basé sur timestamp
+        name: name,
+        criteria: criteria,
+        description: description,
+        createdAt: new Date(),
+        lastUsed: new Date(),
+        usageCount: 0
+      };
+
+      // Ajouter aux recherches sauvegardées
+      currentSearches.push(newSearch);
+
+      // Limite de 10 recherches sauvegardées par coach
+      if (currentSearches.length > 10) {
+        currentSearches.shift(); // Supprimer la plus ancienne
+      }
+
+      // Sauvegarder en base
       await coachProfile.update({
-        savedSearches: updatedSearches,
+        savedSearches: currentSearches,
         totalSearches: (coachProfile.totalSearches || 0) + 1
       });
 
-      console.log(`✅ Search saved successfully for coach ${req.user.email}`);
+      console.log(`✅ Search saved successfully for coach ${req.user.email}: ${name}`);
 
       return res.status(201).json({
         status: 'success',
         message: 'Search saved successfully',
         data: {
           search: newSearch,
-          totalSavedSearches: updatedSearches.length
+          totalSavedSearches: currentSearches.length
         }
       });
 
     } catch (error) {
       console.error(`❌ Error saving search for coach ${req.user.email}:`, error);
+      
+      if (error.name === 'SequelizeValidationError') {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Validation error in search data',
+          errors: error.errors.map(err => ({
+            field: err.path,
+            message: err.message
+          }))
+        });
+      }
       
       return res.status(500).json({
         status: 'error',
@@ -698,12 +794,15 @@ class CoachController {
   }
 
   /**
-   * 🗑️ NOUVELLE MÉTHODE : Supprimer une recherche sauvegardée
+   * 🗑️ Supprimer une recherche sauvegardée
+   * 
+   * Cette méthode permet au coach de supprimer une recherche sauvegardée
+   * qu'il n'utilise plus.
    */
   static async deleteSavedSearch(req, res) {
     try {
-      const userId = req.user.id;
       const { searchId } = req.params;
+      const userId = req.user.id;
 
       console.log(`🗑️ Deleting saved search ${searchId} for coach: ${req.user.email}`);
 
@@ -714,37 +813,45 @@ class CoachController {
       if (!coachProfile) {
         return res.status(404).json({
           status: 'error',
-          message: 'Coach profile not found'
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
         });
       }
 
       const currentSearches = coachProfile.savedSearches || [];
-      const updatedSearches = currentSearches.filter(search => search.id != searchId);
-
-      if (currentSearches.length === updatedSearches.length) {
+      
+      // Trouver l'index de la recherche à supprimer
+      const searchIndex = currentSearches.findIndex(search => search.id === searchId);
+      
+      if (searchIndex === -1) {
         return res.status(404).json({
           status: 'error',
-          message: 'Saved search not found'
+          message: 'Saved search not found',
+          code: 'SEARCH_NOT_FOUND'
         });
       }
 
+      // Supprimer la recherche
+      const deletedSearch = currentSearches.splice(searchIndex, 1)[0];
+
+      // Sauvegarder en base
       await coachProfile.update({
-        savedSearches: updatedSearches
+        savedSearches: currentSearches
       });
 
-      console.log(`✅ Saved search ${searchId} deleted for coach ${req.user.email}`);
+      console.log(`✅ Search deleted successfully for coach ${req.user.email}: ${deletedSearch.name}`);
 
-      return res.status(200).json({
+      return res.json({
         status: 'success',
         message: 'Saved search deleted successfully',
         data: {
-          deletedSearchId: searchId,
-          remainingSearches: updatedSearches.length
+          deletedSearch: deletedSearch,
+          remainingSearches: currentSearches.length
         }
       });
 
     } catch (error) {
-      console.error(`❌ Error deleting saved search for coach ${req.user.email}:`, error);
+      console.error(`❌ Error deleting search for coach ${req.user.email}:`, error);
       
       return res.status(500).json({
         status: 'error',
@@ -755,177 +862,18 @@ class CoachController {
   }
 
   // ========================
-  // MÉTHODES UTILITAIRES STATIQUES
+  // 🛠️ MÉTHODES UTILITAIRES ET ANALYTICS
   // ========================
 
   /**
-   * Calcule la complétude du profil coach
+   * 🎯 Générer des recommandations personnalisées pour le coach
    */
-  static calculateCoachProfileCompleteness(coachProfile) {
-    let completedFields = 0;
-    const totalFields = 10;
-
-    if (coachProfile.position) completedFields++;
-    if (coachProfile.phoneNumber) completedFields++;
-    if (coachProfile.collegeId) completedFields++;
-    if (coachProfile.division) completedFields++;
-    if (coachProfile.teamSport) completedFields++;
-    if (coachProfile.user && coachProfile.user.firstName) completedFields++;
-    if (coachProfile.user && coachProfile.user.lastName) completedFields++;
-    if (coachProfile.user && coachProfile.user.email) completedFields++;
-    
-    // Champs futurs (pour l'évolution du profil)
-    if (coachProfile.bio) completedFields++;
-    if (coachProfile.experience) completedFields++;
-
-    return Math.round((completedFields / totalFields) * 100);
-  }
-
-  /**
-   * Génère des actions rapides pour le dashboard
-   */
-  static generateQuickActions(coachProfile) {
-    const actions = [];
-
-    actions.push({
-      title: 'Search Players',
-      description: 'Find new talent for your program',
-      action: 'search_players',
-      icon: '🔍',
-      priority: 'high'
-    });
-
-    if (coachProfile.savedSearches && coachProfile.savedSearches.length > 0) {
-      actions.push({
-        title: 'Run Saved Search',
-        description: 'Execute your most recent search',
-        action: 'run_saved_search',
-        icon: '⚡',
-        priority: 'medium'
-      });
-    }
-
-    actions.push({
-      title: 'Review Favorites',
-      description: 'Update recruitment status',
-      action: 'review_favorites',
-      icon: '⭐',
-      priority: 'medium'
-    });
-
-    return actions;
-  }
-
-  // Méthodes utilitaires avec implémentations robustes
-  static async getRecentFavorites(coachProfileId, limit) {
-    try {
-      const coachProfile = await CoachProfile.findByPk(coachProfileId);
-      if (!coachProfile) return [];
-      
-      const favorites = coachProfile.favoriteProfiles || [];
-      
-      return favorites
-        .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt))
-        .slice(0, limit);
-    } catch (error) {
-      console.error('Error getting recent favorites:', error);
-      return [];
-    }
-  }
-
-  static async getTopSavedSearches(coachProfileId, limit) {
-    try {
-      const coachProfile = await CoachProfile.findByPk(coachProfileId);
-      if (!coachProfile) return [];
-      
-      const searches = coachProfile.savedSearches || [];
-      
-      return searches
-        .sort((a, b) => (b.useCount || 0) - (a.useCount || 0))
-        .slice(0, limit);
-    } catch (error) {
-      console.error('Error getting top saved searches:', error);
-      return [];
-    }
-  }
-
-  static async calculateRecruitingStats(coachProfileId) {
-    try {
-      const coachProfile = await CoachProfile.findByPk(coachProfileId);
-      if (!coachProfile) {
-        return {
-          totalFavorites: 0,
-          activeRecruitments: 0,
-          thisMonth: { newFavorites: 0, contactsMade: 0 }
-        };
-      }
-      
-      const favorites = coachProfile.favoriteProfiles || [];
-      const thisMonth = new Date();
-      thisMonth.setDate(1);
-      
-      const thisMonthFavorites = favorites.filter(fav => 
-        new Date(fav.addedAt) >= thisMonth
-      );
-      
-      return {
-        totalFavorites: favorites.length,
-        activeRecruitments: favorites.filter(fav => 
-          ['contacted', 'evaluating', 'interested'].includes(fav.status)
-        ).length,
-        thisMonth: {
-          newFavorites: thisMonthFavorites.length,
-          contactsMade: favorites.filter(fav => 
-            fav.status === 'contacted' && new Date(fav.lastUpdated) >= thisMonth
-          ).length
-        }
-      };
-    } catch (error) {
-      console.error('Error calculating recruiting stats:', error);
-      return {
-        totalFavorites: 0,
-        activeRecruitments: 0,
-        thisMonth: { newFavorites: 0, contactsMade: 0 }
-      };
-    }
-  }
-
-  static async getCoachRecentActivity(coachProfileId) {
-    try {
-      const coachProfile = await CoachProfile.findByPk(coachProfileId);
-      if (!coachProfile) return [];
-      
-      const activities = [];
-      
-      if (coachProfile.lastProfileUpdate) {
-        activities.push({
-          type: 'profile_update',
-          description: 'Profile information updated',
-          timestamp: coachProfile.lastProfileUpdate,
-          icon: '✏️'
-        });
-      }
-      
-      activities.push({
-        type: 'profile_created',
-        description: 'Coach profile created',
-        timestamp: coachProfile.createdAt,
-        icon: '🎉'
-      });
-      
-      return activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10);
-    } catch (error) {
-      console.error('Error getting coach recent activity:', error);
-      return [];
-    }
-  }
-
   static async generateCoachRecommendations(coachProfile) {
     const recommendations = [];
     
-    const completionPercentage = CoachController.calculateCoachProfileCompleteness(coachProfile);
-    
-    if (completionPercentage < 70) {
+    // Recommandation pour compléter le profil
+    const profileCompletion = CoachController.calculateProfileCompletion(coachProfile);
+    if (profileCompletion < 80) {
       recommendations.push({
         type: 'profile_completion',
         title: 'Complete Your Profile',
@@ -935,6 +883,7 @@ class CoachController {
       });
     }
     
+    // Recommandation pour augmenter l'activité de recherche
     if ((coachProfile.totalSearches || 0) < 5) {
       recommendations.push({
         type: 'search_activity',
@@ -945,9 +894,66 @@ class CoachController {
       });
     }
 
+    // Recommandation pour diversifier les recherches
+    const savedSearches = coachProfile.savedSearches || [];
+    if (savedSearches.length < 3) {
+      recommendations.push({
+        type: 'save_searches',
+        title: 'Save Your Search Criteria',
+        description: 'Save time by storing your most used search filters',
+        action: 'Save searches',
+        priority: 'low'
+      });
+    }
+
     return recommendations;
   }
 
+  /**
+   * 📊 Calculer le pourcentage de complétion du profil
+   */
+  static calculateProfileCompletion(coachProfile) {
+    const requiredFields = ['position', 'phoneNumber', 'collegeId', 'division', 'teamSport'];
+    const optionalFields = ['bio', 'recruitingPreferences'];
+    
+    let completed = 0;
+    const total = requiredFields.length + optionalFields.length;
+    
+    requiredFields.forEach(field => {
+      if (coachProfile[field]) completed++;
+    });
+    
+    optionalFields.forEach(field => {
+      if (coachProfile[field]) completed++;
+    });
+    
+    return Math.round((completed / total) * 100);
+  }
+
+  /**
+   * ⭐ Récupérer les favoris récents
+   */
+  static async getRecentFavorites(coachProfileId, limit = 5) {
+    try {
+      const coachProfile = await CoachProfile.findByPk(coachProfileId);
+      if (!coachProfile) return [];
+      
+      const favorites = coachProfile.favoriteProfiles || [];
+      
+      // Trier par date d'ajout et prendre les plus récents
+      return favorites
+        .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt))
+        .slice(0, limit);
+      
+    } catch (error) {
+      console.error('Error getting recent favorites:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 📈 Résumé des favoris
+   */
   static async getFavoritesSummary(coachProfileId) {
     try {
       const coachProfile = await CoachProfile.findByPk(coachProfileId);
@@ -987,14 +993,41 @@ class CoachController {
     }
   }
 
-  // Méthodes analytics (implémentation future pour analytics plus détaillées)
-  static async calculateWeeklySearchAverage(coachProfileId) { return 0; }
-  static async analyzeMostUsedFilters(savedSearches) { return []; }
-  static async calculateFavoritesMetrics(coachProfileId) { return {}; }
-  static async analyzeActivityPatterns(coachProfileId) { return {}; }
-  static async generateOptimizationRecommendations(coachProfile) { return []; }
-  static calculateRecruitingEfficiency(searchMetrics, favoritesMetrics) { return 0; }
-  static async calculateEngagementScore(coachProfileId) { return 0; }
+  // 📊 Méthodes analytics (implémentation basique pour éviter les erreurs)
+  static async calculateWeeklySearchAverage(coachProfileId) { 
+    // Implementation future pour analytics plus détaillées
+    return 0; 
+  }
+  
+  static async analyzeMostUsedFilters(savedSearches) { 
+    // Implementation future pour analytics plus détaillées
+    return []; 
+  }
+  
+  static async calculateFavoritesMetrics(coachProfileId) { 
+    // Implementation future pour analytics plus détaillées
+    return { total: 0, thisWeek: 0, thisMonth: 0 }; 
+  }
+  
+  static async analyzeActivityPatterns(coachProfileId) { 
+    // Implementation future pour analytics plus détaillées
+    return {}; 
+  }
+  
+  static async generateOptimizationRecommendations(coachProfile) { 
+    // Implementation future pour recommendations avancées
+    return []; 
+  }
+  
+  static calculateRecruitingEfficiency(searchMetrics, favoritesMetrics) { 
+    // Implementation future pour calcul d'efficacité
+    return 0; 
+  }
+  
+  static async calculateEngagementScore(coachProfileId) { 
+    // Implementation future pour score d'engagement
+    return 0; 
+  }
 }
 
 module.exports = CoachController;

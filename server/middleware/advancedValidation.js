@@ -7,20 +7,27 @@ const { njcaaCoachRegistrationSchema } = require('../validators/njcaaCoachValida
 const { playerEvaluationSchema } = require('./playerEvaluationValidation');
 
 /**
- * Middleware de validation avancé complet avec toutes les fonctions nécessaires
+ * 🔧 Middleware de validation avancé COMPLET avec toutes les fonctions nécessaires
  * 
- * CORRECTION : Ajout de la fonction validateProfileUpdate manquante
- * qui était référencée dans les routes mais n'existait pas.
+ * CORRECTION MAJEURE : Ajout de la fonction validatePlayerSearch manquante
+ * qui était référencée dans les routes coaches mais n'existait pas.
  * 
- * Ce middleware gère maintenant TOUS les types d'utilisateurs :
- * - player (joueurs NJCAA)
- * - coach (coachs NCAA/NAIA) 
- * - njcaa_coach (coachs NJCAA)
- * - admin (administrateurs)
+ * 🎯 Fonctions exportées :
+ * - validateRegistration : Validation d'inscription conditionnelle par type
+ * - validateProfileUpdate : Validation de mise à jour de profil
+ * - validatePlayerEvaluation : Validation des évaluations NJCAA
+ * - validatePlayerSearch : Validation des critères de recherche [NOUVELLE]
+ * 
+ * 🏗️ Architecture pédagogique : Ce fichier illustre l'importance de maintenir
+ * une correspondance exacte entre les imports et les exports pour éviter
+ * les erreurs `undefined` difficiles à diagnostiquer.
  */
 
 /**
- * Middleware principal de validation d'inscription (ÉTENDU)
+ * 📝 Middleware principal de validation d'inscription (ÉTENDU)
+ * 
+ * Cette fonction orchestre la validation complète selon le type d'utilisateur,
+ * incluant maintenant le support des coachs NJCAA.
  */
 const validateRegistration = async (req, res, next) => {
   try {
@@ -82,135 +89,72 @@ const validateRegistration = async (req, res, next) => {
           field: detail.path.join('.'),
           message: detail.message,
           type: detail.type
-        })),
-        userType: userType
+        }))
       });
     }
 
   } catch (error) {
-    console.error('Advanced validation middleware error:', error);
+    console.error('Registration validation system error:', error);
     return res.status(500).json({
       status: 'error',
-      message: 'Validation system error',
-      code: 'VALIDATION_SYSTEM_ERROR'
+      message: 'Registration validation system error',
+      code: 'REGISTRATION_VALIDATION_SYSTEM_ERROR'
     });
   }
 };
 
 /**
- * FONCTION MANQUANTE : Middleware de validation pour les mises à jour de profil
+ * ✏️ Middleware de validation pour les mises à jour de profil
  * 
- * Cette fonction était référencée dans les routes mais n'existait pas.
- * Elle valide les mises à jour de profil selon le type d'utilisateur.
- * 
- * @param {string} userType - Type d'utilisateur ('player', 'coach', 'njcaa_coach')
- * @returns {Function} Middleware function
+ * Cette fonction valide les données de mise à jour selon le type d'utilisateur.
+ * Elle permet des validations partielles (tous les champs optionnels).
  */
 const validateProfileUpdate = (userType) => {
   return async (req, res, next) => {
     try {
       console.log(`🔍 Validating profile update for user type: ${userType}`);
 
-      // Schémas de validation pour les mises à jour selon le type d'utilisateur
+      // Définir les schémas de mise à jour selon le type
       let updateSchema;
 
-      switch (userType) {
-        case 'player':
-          updateSchema = Joi.object({
-            gender: Joi.string()
-              .valid('male', 'female')
-              .optional()
-              .messages({
-                'any.only': 'Gender must be either "male" or "female"'
-              }),
-
-            collegeId: Joi.number()
-              .integer()
-              .positive()
-              .optional()
-              .messages({
-                'number.base': 'Invalid college selection',
-                'number.integer': 'Invalid college selection',
-                'number.positive': 'Invalid college selection'
-              }),
-
-            // Les informations de base ne peuvent pas être modifiées via cette route
-            // (firstName, lastName, email nécessitent un processus de vérification séparé)
-
-          }).options({
-            abortEarly: false,
-            stripUnknown: true,
-            presence: 'optional' // Tous les champs sont optionnels pour une mise à jour
-          });
-          break;
-
-        case 'coach':
-          updateSchema = Joi.object({
-            phoneNumber: Joi.string()
-              .pattern(/^\+?[\d\s\-\(\)]+$/)
-              .min(10)
-              .max(20)
-              .optional()
-              .messages({
-                'string.pattern.base': 'Please provide a valid phone number',
-                'string.min': 'Phone number must be at least 10 characters',
-                'string.max': 'Phone number must not exceed 20 characters'
-              }),
-
-            position: Joi.string()
-              .valid('head_coach', 'assistant_coach')
-              .optional()
-              .messages({
-                'any.only': 'Position must be either "Head Coach" or "Assistant Coach"'
-              }),
-
-            // Autres champs sensibles nécessitent validation admin
-            // (college, division, teamSport)
-
-          }).options({
-            abortEarly: false,
-            stripUnknown: true,
-            presence: 'optional'
-          });
-          break;
-
-        case 'njcaa_coach':
-          updateSchema = Joi.object({
-            phoneNumber: Joi.string()
-              .pattern(/^\+?[\d\s\-\(\)]+$/)
-              .min(10)
-              .max(20)
-              .optional()
-              .messages({
-                'string.pattern.base': 'Please provide a valid phone number',
-                'string.min': 'Phone number must be at least 10 characters',
-                'string.max': 'Phone number must not exceed 20 characters'
-              }),
-
-            // Autres champs nécessitent validation admin pour les coachs NJCAA
-            // (position, college, division, teamSport)
-
-          }).options({
-            abortEarly: false,
-            stripUnknown: true,
-            presence: 'optional'
-          });
-          break;
-
-        default:
-          return res.status(400).json({
-            status: 'error',
-            message: `Profile update validation not implemented for user type: ${userType}`,
-            code: 'UPDATE_VALIDATION_NOT_SUPPORTED'
-          });
+      if (userType === 'player') {
+        // Schéma simplifié pour les joueurs
+        updateSchema = Joi.object({
+          bio: Joi.string().max(500).optional(),
+          instagramHandle: Joi.string().max(50).optional(),
+          highlights: Joi.string().uri().optional(),
+          transferStatus: Joi.string().valid('not_transferring', 'considering', 'actively_looking').optional(),
+          achievements: Joi.string().max(1000).optional(),
+          gpa: Joi.number().min(0).max(4.0).optional(),
+          isProfileVisible: Joi.boolean().optional()
+        });
+      } else if (userType === 'coach') {
+        // Schéma pour les coachs NCAA/NAIA
+        updateSchema = Joi.object({
+          phoneNumber: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).min(10).max(20).optional(),
+          bio: Joi.string().max(500).optional(),
+          recruitingPreferences: Joi.object().optional()
+        });
+      } else if (userType === 'njcaa_coach') {
+        // Schéma pour les coachs NJCAA
+        updateSchema = Joi.object({
+          phoneNumber: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).min(10).max(20).optional()
+        });
+      } else {
+        return res.status(400).json({
+          status: 'error',
+          message: `Profile update not supported for user type: ${userType}`,
+          code: 'UNSUPPORTED_USER_TYPE'
+        });
       }
 
       // Effectuer la validation
-      const { error, value } = updateSchema.validate(req.body);
+      const { error, value } = updateSchema.validate(req.body, {
+        abortEarly: false,
+        stripUnknown: true
+      });
 
       if (error) {
-        console.log(`❌ Profile update validation failed for ${userType}:`, error.details);
-        
         return res.status(400).json({
           status: 'error',
           message: 'Profile update validation failed',
@@ -234,9 +178,7 @@ const validateProfileUpdate = (userType) => {
         });
       }
 
-      // Remplacer les données de la requête par les données validées
       req.body = value;
-      
       console.log(`✅ Profile update validation successful for ${userType}`);
       next();
 
@@ -252,7 +194,180 @@ const validateProfileUpdate = (userType) => {
 };
 
 /**
- * Middleware de validation pour les évaluations de joueurs
+ * 🔍 NOUVELLE FONCTION : Middleware de validation pour les recherches de joueurs
+ * 
+ * Cette fonction valide les critères de recherche que les coachs utilisent
+ * pour trouver des joueurs correspondant à leurs besoins.
+ * 
+ * 🎯 Critères supportés :
+ * - Position de jeu
+ * - Tranche d'âge
+ * - Taille/poids
+ * - Niveau académique
+ * - Disponibilité transfert
+ * - Localisation géographique
+ */
+const validatePlayerSearch = async (req, res, next) => {
+  try {
+    console.log('🔍 Validating player search criteria...');
+
+    // Schéma de validation pour les critères de recherche
+    const searchSchema = Joi.object({
+      // Critères de jeu
+      position: Joi.array().items(
+        Joi.string().valid(
+          'goalkeeper', 'center_back', 'full_back', 'wing_back',
+          'defensive_midfielder', 'central_midfielder', 'attacking_midfielder',
+          'winger', 'striker', 'forward'
+        )
+      ).optional(),
+
+      // Critères physiques
+      heightRange: Joi.object({
+        min: Joi.number().min(150).max(220).optional(),
+        max: Joi.number().min(150).max(220).optional()
+      }).optional(),
+
+      weightRange: Joi.object({
+        min: Joi.number().min(50).max(150).optional(),
+        max: Joi.number().min(50).max(150).optional()
+      }).optional(),
+
+      // Critères démographiques
+      ageRange: Joi.object({
+        min: Joi.number().min(16).max(30).optional(),
+        max: Joi.number().min(16).max(30).optional()
+      }).optional(),
+
+      gender: Joi.string().valid('male', 'female').optional(),
+
+      // Critères académiques
+      gpaRange: Joi.object({
+        min: Joi.number().min(0).max(4.0).optional(),
+        max: Joi.number().min(0).max(4.0).optional()
+      }).optional(),
+
+      currentYear: Joi.array().items(
+        Joi.string().valid('freshman', 'sophomore')
+      ).optional(),
+
+      graduationYear: Joi.array().items(
+        Joi.number().min(2024).max(2030)
+      ).optional(),
+
+      // Critères de transfert
+      transferStatus: Joi.array().items(
+        Joi.string().valid('not_transferring', 'considering', 'actively_looking')
+      ).optional(),
+
+      // Critères géographiques
+      states: Joi.array().items(
+        Joi.string().length(2).uppercase() // Codes d'état US (ex: CA, TX, FL)
+      ).optional(),
+
+      regions: Joi.array().items(
+        Joi.string().valid('Northeast', 'Southeast', 'Midwest', 'Southwest', 'West')
+      ).optional(),
+
+      // Critères de recherche avancés
+      keywords: Joi.string().max(100).optional(),
+      
+      // Métadonnées de recherche
+      searchName: Joi.string().max(50).optional(), // Pour sauvegarder la recherche
+      
+      // Pagination et tri
+      page: Joi.number().min(1).default(1).optional(),
+      limit: Joi.number().min(1).max(50).default(20).optional(),
+      sortBy: Joi.string().valid('relevance', 'gpa', 'age', 'height', 'weight', 'createdAt').default('relevance').optional(),
+      sortOrder: Joi.string().valid('asc', 'desc').default('desc').optional()
+    });
+
+    // Effectuer la validation
+    const { error, value } = searchSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true
+    });
+
+    if (error) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Player search validation failed',
+        code: 'PLAYER_SEARCH_VALIDATION_ERROR',
+        errors: error.details.map(detail => ({
+          field: detail.path.join('.'),
+          message: detail.message,
+          type: detail.type
+        }))
+      });
+    }
+
+    // Validation logique : vérifier la cohérence des ranges
+    const logicErrors = [];
+
+    if (value.heightRange && value.heightRange.min && value.heightRange.max) {
+      if (value.heightRange.min > value.heightRange.max) {
+        logicErrors.push({
+          field: 'heightRange',
+          message: 'Minimum height cannot be greater than maximum height'
+        });
+      }
+    }
+
+    if (value.weightRange && value.weightRange.min && value.weightRange.max) {
+      if (value.weightRange.min > value.weightRange.max) {
+        logicErrors.push({
+          field: 'weightRange',
+          message: 'Minimum weight cannot be greater than maximum weight'
+        });
+      }
+    }
+
+    if (value.ageRange && value.ageRange.min && value.ageRange.max) {
+      if (value.ageRange.min > value.ageRange.max) {
+        logicErrors.push({
+          field: 'ageRange',
+          message: 'Minimum age cannot be greater than maximum age'
+        });
+      }
+    }
+
+    if (value.gpaRange && value.gpaRange.min && value.gpaRange.max) {
+      if (value.gpaRange.min > value.gpaRange.max) {
+        logicErrors.push({
+          field: 'gpaRange',
+          message: 'Minimum GPA cannot be greater than maximum GPA'
+        });
+      }
+    }
+
+    if (logicErrors.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Player search logic validation failed',
+        code: 'PLAYER_SEARCH_LOGIC_ERROR',
+        errors: logicErrors
+      });
+    }
+
+    req.body = value;
+    console.log('✅ Player search validation successful');
+    next();
+
+  } catch (error) {
+    console.error('Player search validation error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Player search validation system error',
+      code: 'PLAYER_SEARCH_VALIDATION_SYSTEM_ERROR'
+    });
+  }
+};
+
+/**
+ * 📝 Middleware de validation pour les évaluations de joueurs
+ * 
+ * Cette fonction valide les données d'évaluation selon le schéma défini
+ * pour les coachs NJCAA qui évaluent leurs joueurs.
  */
 const validatePlayerEvaluation = async (req, res, next) => {
   try {
@@ -291,9 +406,10 @@ const validatePlayerEvaluation = async (req, res, next) => {
   }
 };
 
-// EXPORT COMPLET avec toutes les fonctions nécessaires
+// 🎯 EXPORT COMPLET avec TOUTES les fonctions nécessaires
 module.exports = {
   validateRegistration,
-  validateProfileUpdate, // ← FONCTION MANQUANTE AJOUTÉE
-  validatePlayerEvaluation
-};
+  validateProfileUpdate,
+  validatePlayerEvaluation,
+  validatePlayerSearch // ← FONCTION MANQUANTE AJOUTÉE !
+}
