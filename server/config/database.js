@@ -1,6 +1,8 @@
 // portall/server/config/database.js
 
-require('dotenv').config();
+require('dotenv').config({
+  path: process.env.NODE_ENV === 'test' ? '.env.test' : '.env'
+});
 
 module.exports = {
   development: {
@@ -18,13 +20,19 @@ module.exports = {
     }
   },
   test: {
-    username: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: 'portall_test',
-    host: process.env.DB_HOST,
+    username: process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD || '',
+    database: 'portall_test', // Force le nom de la base de test
+    host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
-    logging: false // Pas de logs en test
+    logging: false, // Désactiver les logs en mode test pour plus de clarté
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
   },
   production: {
     username: process.env.DB_USER,
