@@ -1,10 +1,44 @@
-// portall/server/services/authService.js
+// server/services/authService.js
 
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { jwt: jwtConfig } = require('../config/auth');
+
+/**
+ * 🔧 Service d'authentification unifié pour tous les environnements
+ * 
+ * CORRECTION MAJEURE : Configuration JWT unifiée pour éviter les incohérences
+ * entre génération et vérification des tokens.
+ * 
+ * Le problème précédent : AuthService utilisait config/auth.js pendant que
+ * le middleware auth.js utilisait directement process.env.JWT_SECRET.
+ * 
+ * Solution : Centraliser la configuration JWT selon l'environnement.
+ */
 
 class AuthService {
+  /**
+   * Obtenir la configuration JWT selon l'environnement
+   */
+  static getJWTConfig() {
+    if (process.env.NODE_ENV === 'test') {
+      return {
+        secret: 'test_jwt_secret_for_testing_only',
+        expiresIn: '1h',
+        refreshExpiresIn: '7d',
+        issuer: 'portall-api',
+        audience: 'portall-app'
+      };
+    }
+    
+    return {
+      secret: process.env.JWT_SECRET || 'fallback_secret_for_development',
+      expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+      issuer: 'portall-api',
+      audience: 'portall-app'
+    };
+  }
+
   /**
    * Génère un token JWT pour un utilisateur
    * @param {Object} user - L'objet utilisateur
@@ -12,6 +46,8 @@ class AuthService {
    * @returns {string} Le token JWT signé
    */
   static generateToken(user, tokenType = 'access') {
+    const jwtConfig = this.getJWTConfig();
+    
     // Payload : les données qu'on veut stocker dans le token
     const payload = {
       userId: user.id,
@@ -24,12 +60,12 @@ class AuthService {
     // Options du token
     const options = {
       expiresIn: tokenType === 'refresh' ? jwtConfig.refreshExpiresIn : jwtConfig.expiresIn,
-      issuer: 'portall-api', // Qui a émis le token
-      audience: 'portall-app', // Pour qui le token est destiné
-      subject: user.id.toString() // Le sujet du token (l'utilisateur)
+      issuer: jwtConfig.issuer,
+      audience: jwtConfig.audience,
+      subject: user.id.toString()
     };
 
-    // Signer le token avec notre secret
+    // Signer le token avec la clé secrète unifiée
     return jwt.sign(payload, jwtConfig.secret, options);
   }
 
@@ -39,6 +75,8 @@ class AuthService {
    * @returns {Object} Objet contenant accessToken et refreshToken
    */
   static generateTokenPair(user) {
+    const jwtConfig = this.getJWTConfig();
+    
     const accessToken = this.generateToken(user, 'access');
     const refreshToken = this.generateToken(user, 'refresh');
 
@@ -57,11 +95,13 @@ class AuthService {
    * @throws {Error} Si le token est invalide
    */
   static verifyToken(token) {
+    const jwtConfig = this.getJWTConfig();
+    
     try {
-      // Vérifier et décoder le token
+      // Vérifier et décoder le token avec la même configuration
       const decoded = jwt.verify(token, jwtConfig.secret, {
-        issuer: 'portall-api',
-        audience: 'portall-app'
+        issuer: jwtConfig.issuer,
+        audience: jwtConfig.audience
       });
 
       return decoded;
@@ -117,6 +157,7 @@ class AuthService {
     const roleHierarchy = {
       'player': 1,
       'coach': 2,
+      'njcaa_coach': 2, // Même niveau que coach normal
       'admin': 3
     };
 

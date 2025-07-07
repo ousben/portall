@@ -1,23 +1,17 @@
-// portall/server/tests/setup.js
+// server/tests/setup.js
 
 // Charger les variables d'environnement de test AVANT tout autre import
 process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = 'test_jwt_secret_for_testing_only'; // ← CRUCIAL
 require('dotenv').config({ path: '.env.test' });
 
 const { sequelize } = require('../config/database.connection');
 
 /**
- * 🔧 Configuration globale des tests avec gestion complète de l'environnement
+ * 🔧 Configuration des tests avec JWT unifié
  * 
- * Ce fichier configure l'environnement de test pour garantir que chaque test
- * s'exécute dans un environnement propre et prévisible. Pensez à cela comme
- * préparer un laboratoire scientifique avant chaque expérience.
- * 
- * 🎯 Fonctionnalités :
- * - Connexion et synchronisation de la base de données de test
- * - Nettoyage entre les tests pour éviter les interférences
- * - Gestion des timeouts pour les opérations de base de données
- * - Configuration des logs pour plus de clarté pendant les tests
+ * CORRECTION : Configuration explicite du JWT_SECRET pour les tests
+ * pour garantir la cohérence entre génération et vérification des tokens.
  */
 
 // Configuration globale avant tous les tests
@@ -28,6 +22,7 @@ beforeAll(async () => {
   }
 
   console.log('🔧 Setting up test environment...');
+  console.log(`🔑 JWT Secret configured: ${process.env.JWT_SECRET ? 'YES' : 'NO'}`);
   
   // Vérifier la connexion à la base de données
   try {
@@ -39,7 +34,6 @@ beforeAll(async () => {
   }
 
   // Synchroniser les modèles avec la base de données de test
-  // ATTENTION : force: true efface toutes les données existantes
   try {
     await sequelize.sync({ force: true });
     console.log('✅ Test database synchronized successfully.');
@@ -85,7 +79,6 @@ afterAll(async () => {
 });
 
 // Configuration des timeouts globaux pour les tests de base de données
-// Les opérations de base de données peuvent prendre du temps, surtout lors des synchronisations
 jest.setTimeout(30000);
 
 // Gérer les rejections non gérées pendant les tests

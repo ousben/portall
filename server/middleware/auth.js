@@ -2,6 +2,7 @@
 
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const AuthService = require('../services/authService');
 
 /**
  * Middleware d'authentification et d'autorisation étendu pour Phase 5
@@ -36,41 +37,30 @@ const authenticate = async (req, res, next) => {
   try {
     // Extraire le token du header Authorization
     const authHeader = req.headers.authorization;
+    const token = AuthService.extractTokenFromHeader(authHeader);
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return res.status(401).json({
         status: 'error',
         message: 'Access token required',
-        code: 'TOKEN_REQUIRED'
+        code: 'AUTH_REQUIRED'
       });
     }
 
-    const token = authHeader.substring(7); // Retirer "Bearer "
-
-    // Vérifier et décoder le token
+    // Vérifier et décoder le token avec AuthService (configuration unifiée)
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtError) {
-      if (jwtError.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          status: 'error',
-          message: 'Access token expired',
-          code: 'TOKEN_EXPIRED'
-        });
-      } else if (jwtError.name === 'JsonWebTokenError') {
-        return res.status(401).json({
-          status: 'error',
-          message: 'Invalid access token',
-          code: 'TOKEN_INVALID'
-        });
-      } else {
-        throw jwtError;
-      }
+      decoded = AuthService.verifyToken(token);
+    } catch (authError) {
+      return res.status(401).json({
+        status: 'error',
+        message: authError.message,
+        code: 'TOKEN_INVALID'
+      });
     }
 
     // Récupérer l'utilisateur complet depuis la base de données
-    const user = await User.findByPk(decoded.id);
+    const user = await User.findByPk(decoded.userId);
     
     if (!user) {
       return res.status(401).json({
@@ -89,11 +79,11 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Ajouter les informations utilisateur à la requête (étendu pour njcaa_coach)
+    // Ajouter les informations utilisateur à la requête
     req.user = {
       id: user.id,
       email: user.email,
-      userType: user.userType, // Maintenant inclut 'njcaa_coach'
+      userType: user.userType,
       firstName: user.firstName,
       lastName: user.lastName,
       isActive: user.isActive,
@@ -139,7 +129,7 @@ const authorize = (allowedTypes) => {
       });
     }
 
-    // Vérifier l'autorisation par type (maintenant étendu pour njcaa_coach)
+    // Vérifier l'autorisation par type
     if (!types.includes(req.user.userType)) {
       return res.status(403).json({
         status: 'error',
@@ -245,6 +235,24 @@ const requireAdmin = (req, res, next) => {
   }
 
   next();
+};
+
+// Middleware de propriété (pour vérifier que l'utilisateur modifie ses propres données)
+const checkOwnership = (resourceIdField = 'id') => {
+  return (req, res, next) => {
+    const resourceId = req.params[resourceIdField];
+    const userId = req.user.id;
+
+    if (parseInt(resourceId) !== parseInt(userId) && req.user.userType !== 'admin') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Access denied. You can only access your own resources.',
+        code: 'OWNERSHIP_REQUIRED'
+      });
+    }
+
+    next();
+  };
 };
 
 /**
@@ -393,8 +401,10 @@ module.exports = {
   authenticate,
   authorize,
   requireAdmin,
-  requireNJCAACoach, // NOUVEAU
-  requireAnyCoach, // NOUVEAU
-  requirePlayerEvaluationAccess, // NOUVEAU
-  enrichUserContext // ÉTENDU
+  requireNJCAACoach,
+  requireAnyCoach,
+  requireAdmin,
+  checkOwnership,
+  requirePlayerEvaluationAccess,
+  enrichUserContext
 };
