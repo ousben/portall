@@ -5,33 +5,16 @@ const { Op } = require('sequelize');
 const { sequelize } = require('../config/database.connection');
 
 /**
- * Contrôleur pour la gestion des coachs NJCAA avec leurs fonctionnalités spécialisées
+ * 🏟️ Contrôleur pour la gestion des coachs NJCAA avec leurs fonctionnalités spécialisées
  * 
  * ARCHITECTURE MÉTIER : Ce contrôleur gère un workflow complètement différent
  * des autres types d'utilisateurs. Les coachs NJCAA ne payent pas d'abonnement
  * et ne recherchent pas de joueurs. Leur rôle principal est d'évaluer leurs
  * propres joueurs pour aider les coachs NCAA/NAIA dans leur recrutement.
- * 
- * Fonctionnalités principales :
- * 1. Dashboard avec liste de leurs joueurs
- * 2. Système d'évaluation des joueurs
- * 3. Historique des évaluations effectuées
- * 4. Gestion du profil personnel
- * 
- * Cette séparation claire des responsabilités facilite la maintenance
- * et l'évolution future de chaque type d'utilisateur.
  */
 class NJCAACoachController {
   /**
    * 📊 Dashboard principal du coach NJCAA - Page "Main Page"
-   * 
-   * Cette méthode implémente la page principale selon tes spécifications :
-   * - Liste des joueurs de son college et de son genre d'équipe
-   * - Mise à jour dynamique quand de nouveaux joueurs s'inscrivent
-   * - Interface pour évaluer directement les joueurs
-   * 
-   * LOGIQUE MÉTIER : Un coach masculin ne voit que les joueurs masculins
-   * de son college, et vice versa pour les coachs féminins.
    */
   static async getDashboard(req, res) {
     try {
@@ -64,71 +47,71 @@ class NJCAACoachController {
         });
       }
 
-      // LOGIQUE CRUCIALE : Déterminer le genre des joueurs selon l'équipe du coach
-      // Cette logique implémente la règle métier fondamentale : correspondance genre coach-joueurs
+      // 🎯 LOGIQUE CRUCIALE : Déterminer le genre des joueurs selon l'équipe du coach
       const playerGender = coachProfile.teamSport === 'mens_soccer' ? 'male' : 'female';
-      
-      console.log(`🎯 Coach manages ${coachProfile.teamSport}, looking for ${playerGender} players`);
 
-      // Récupération des joueurs correspondant aux critères du coach
-      // Cette requête implémente l'actualisation dynamique que tu as spécifiée
-      const myPlayers = await PlayerProfile.findAll({
+      // Récupérer les joueurs du même college ET du même genre
+      const players = await PlayerProfile.findAll({
         where: {
-          collegeId: coachProfile.collegeId, // Même college
-          gender: playerGender, // Même genre que l'équipe du coach
-          isProfileVisible: true // Seulement les profils actifs et validés
+          collegeId: coachProfile.collegeId,
+          gender: playerGender,
+          isProfileVisible: true
         },
         include: [
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'isActive', 'createdAt'],
-            where: { isActive: true } // Seulement les utilisateurs actifs
+            attributes: ['id', 'firstName', 'lastName', 'email'],
+            where: { isActive: true }
+          },
+          {
+            model: NJCAACollege,
+            as: 'college',
+            attributes: ['name', 'state']
           }
         ],
         order: [
-          ['created_at', 'DESC'], // Les nouveaux joueurs en premier
-          ['updated_at', 'DESC']
+          ['graduationYear', 'ASC'],
+          ['currentYear', 'ASC'],
+          [{ model: User, as: 'user' }, 'lastName', 'ASC']
         ]
       });
 
-      // Récupération des évaluations existantes pour ces joueurs
-      // Ceci permet d'afficher l'état d'avancement des évaluations
-      const playerIds = myPlayers.map(player => player.id);
+      // Récupérer les évaluations existantes pour ces joueurs
+      const playerIds = players.map(p => p.id);
       const existingEvaluations = await PlayerEvaluation.findAll({
         where: {
           playerId: { [Op.in]: playerIds },
           coachId: coachProfile.id,
-          isCurrent: true // Seulement les évaluations actuelles
-        },
-        attributes: ['playerId', 'evaluationDate', 'availableToTransfer']
+          isCurrent: true
+        }
       });
 
-      // Créer un mapping pour optimiser l'affichage côté client
-      const evaluationMap = {};
+      // Créer un map pour faciliter la recherche
+      const evaluationMap = new Map();
       existingEvaluations.forEach(evaluation => {
-        evaluationMap[evaluation.playerId] = {
-          hasEvaluation: true,
-          evaluationDate: evaluation.evaluationDate,
-          availableToTransfer: evaluation.availableToTransfer
+        evaluationMap.set(evaluation.playerId, evaluation);
+      });
+
+      // Enrichir les données des joueurs avec le statut d'évaluation
+      const playersWithEvaluationStatus = players.map(player => {
+        const evaluation = evaluationMap.get(player.id);
+        return {
+          ...player.toJSON(),
+          evaluationStatus: {
+            hasEvaluation: !!evaluation,
+            lastEvaluated: evaluation?.evaluationDate || null,
+            availableToTransfer: evaluation?.availableToTransfer || null,
+            evaluationVersion: evaluation?.evaluationVersion || 0
+          }
         };
       });
 
-      // Enrichir les données des joueurs avec leur statut d'évaluation
-      const playersWithEvaluationStatus = myPlayers.map(player => ({
-        ...player.toJSON(),
-        evaluationStatus: evaluationMap[player.id] || {
-          hasEvaluation: false,
-          evaluationDate: null,
-          availableToTransfer: null
-        }
-      }));
-
-      // Calculer des statistiques utiles pour le dashboard
+      // 📈 Calculer des statistiques pour le dashboard
       const dashboardStats = {
-        totalPlayers: myPlayers.length,
+        totalPlayers: players.length,
         evaluatedPlayers: existingEvaluations.length,
-        pendingEvaluations: myPlayers.length - existingEvaluations.length,
+        unevaluatedPlayers: players.length - existingEvaluations.length,
         availableForTransfer: existingEvaluations.filter(e => e.availableToTransfer).length,
         lastEvaluationDate: coachProfile.lastEvaluationDate
       };
@@ -165,14 +148,150 @@ class NJCAACoachController {
   }
 
   /**
+   * ⚙️ Page "Settings" - Gestion du profil personnel
+   */
+  static async getSettings(req, res) {
+    try {
+      const userId = req.user.id;
+
+      console.log(`⚙️ Loading settings for NJCAA coach: ${req.user.email}`);
+
+      const coachProfile = await NJCAACoachProfile.findOne({
+        where: { userId: userId },
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt', 'lastLogin']
+          },
+          {
+            model: NJCAACollege,
+            as: 'college',
+            attributes: ['id', 'name', 'state', 'region']
+          }
+        ]
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
+        });
+      }
+
+      const activityStats = {
+        totalEvaluations: coachProfile.totalEvaluations,
+        lastEvaluationDate: coachProfile.lastEvaluationDate,
+        accountCreatedDate: coachProfile.user.createdAt,
+        lastLoginDate: coachProfile.user.lastLogin
+      };
+
+      return res.json({
+        status: 'success',
+        data: {
+          profile: coachProfile.toJSON(),
+          user: coachProfile.user,
+          college: coachProfile.college,
+          activityStats: activityStats,
+          editableFields: {
+            phoneNumber: true,
+            position: false,
+            teamSport: false,
+            college: false,
+            division: false
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('Get settings error:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to load settings',
+        code: 'SETTINGS_ERROR'
+      });
+    }
+  }
+
+  /**
+   * ✏️ Mise à jour des paramètres du profil
+   */
+  static async updateSettings(req, res) {
+    try {
+      const userId = req.user.id;
+      const updateData = req.body;
+
+      console.log(`✏️ Updating settings for NJCAA coach: ${req.user.email}`);
+
+      const coachProfile = await NJCAACoachProfile.findOne({
+        where: { userId: userId }
+      });
+
+      if (!coachProfile) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Coach profile not found',
+          code: 'COACH_PROFILE_NOT_FOUND'
+        });
+      }
+
+      const allowedFields = ['phoneNumber'];
+      const filteredData = {};
+      
+      allowedFields.forEach(field => {
+        if (updateData[field] !== undefined) {
+          filteredData[field] = updateData[field];
+        }
+      });
+
+      if (Object.keys(filteredData).length === 0) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'No valid fields provided for update',
+          code: 'NO_VALID_FIELDS'
+        });
+      }
+
+      await coachProfile.update(filteredData);
+
+      console.log(`✅ Settings updated successfully for coach ${userId}`);
+
+      return res.json({
+        status: 'success',
+        message: 'Settings updated successfully',
+        data: {
+          updatedFields: Object.keys(filteredData),
+          profile: coachProfile.toJSON()
+        }
+      });
+
+    } catch (error) {
+      console.error('Update settings error:', error);
+      
+      if (error.name === 'SequelizeValidationError') {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Validation error in settings data',
+          errors: error.errors.map(err => ({
+            field: err.path,
+            message: err.message
+          }))
+        });
+      }
+
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to update settings',
+        code: 'UPDATE_SETTINGS_ERROR'
+      });
+    }
+  }
+
+  /**
    * 📝 Évaluation d'un joueur spécifique
    * 
-   * Cette méthode implémente le cœur de la fonctionnalité métier des coachs NJCAA.
-   * Elle permet de créer ou mettre à jour l'évaluation d'un joueur selon
-   * les critères que tu as spécifiés.
-   * 
-   * IMPORTANT : Cette méthode gère le versioning automatique des évaluations,
-   * permettant de conserver un historique tout en marquant la plus récente.
+   * ✅ VERSION CORRIGÉE : Résout tous les problèmes identifiés
    */
   static async evaluatePlayer(req, res) {
     const transaction = await sequelize.transaction();
@@ -184,21 +303,24 @@ class NJCAACoachController {
 
       console.log(`📝 Creating/updating evaluation for player ${playerId} by coach ${req.user.email}`);
 
-      // Vérification des droits : le coach peut-il évaluer ce joueur ?
-      const coachProfile = await NJCAACoachController.validateCoachPlayerRelationship(
+      // ✅ CORRECTION #1 : Utilisation correcte du résultat de validation
+      const validationResult = await NJCAACoachController.validateCoachPlayerRelationship(
         coachUserId, 
         playerId, 
         transaction
       );
 
-      if (!coachProfile.canEvaluate) {
+      if (!validationResult.canEvaluate) {
         await transaction.rollback();
         return res.status(403).json({
           status: 'error',
-          message: coachProfile.reason,
-          code: 'EVALUATION_NOT_AUTHORIZED'
+          message: validationResult.reason,
+          code: 'EVALUATION_ACCESS_DENIED' // ✅ CORRECTION #2 : Code d'erreur cohérent avec les tests
         });
       }
+
+      // ✅ CORRECTION #1 (suite) : Extraire les bonnes propriétés
+      const { coachProfile, playerProfile } = validationResult;
 
       // Vérifier si une évaluation existe déjà pour ce joueur
       const existingEvaluation = await PlayerEvaluation.findOne({
@@ -210,16 +332,28 @@ class NJCAACoachController {
         transaction
       });
 
-      let evaluation;
+      let newEvaluation;
 
       if (existingEvaluation) {
-        // Mise à jour : créer une nouvelle version
-        console.log(`🔄 Updating existing evaluation (creating new version)`);
-        evaluation = await existingEvaluation.createNewVersion(evaluationData, transaction);
+        // ✅ CORRECTION #3 : Mise à jour sans méthode createNewVersion inexistante
+        console.log(`🔄 Updating existing evaluation (version ${existingEvaluation.evaluationVersion})`);
+        
+        // Marquer l'ancienne évaluation comme non courante
+        await existingEvaluation.update({ isCurrent: false }, { transaction });
+        
+        // Créer une nouvelle version
+        newEvaluation = await PlayerEvaluation.create({
+          playerId: parseInt(playerId),
+          coachId: coachProfile.id,
+          ...evaluationData,
+          evaluationVersion: existingEvaluation.evaluationVersion + 1,
+          isCurrent: true,
+          evaluationDate: new Date()
+        }, { transaction });
       } else {
-        // Nouvelle évaluation
-        console.log(`✨ Creating new evaluation`);
-        evaluation = await PlayerEvaluation.create({
+        // ✨ Création : première évaluation pour ce joueur
+        console.log(`✨ Creating first evaluation for player ${playerId}`);
+        newEvaluation = await PlayerEvaluation.create({
           playerId: parseInt(playerId),
           coachId: coachProfile.id,
           ...evaluationData,
@@ -229,20 +363,31 @@ class NJCAACoachController {
         }, { transaction });
       }
 
-      // Mettre à jour les statistiques du coach
-      await coachProfile.incrementEvaluations();
+      // ✅ CORRECTION #4 : Appel correct sur la bonne instance
+      await coachProfile.update({
+        totalEvaluations: coachProfile.totalEvaluations + 1,
+        lastEvaluationDate: new Date()
+      }, { transaction });
 
       await transaction.commit();
 
-      console.log(`✅ Evaluation completed successfully (ID: ${evaluation.id})`);
+      console.log(`✅ Evaluation completed successfully for player ${playerId}`);
 
-      return res.status(existingEvaluation ? 200 : 201).json({
+      return res.status(201).json({
         status: 'success',
         message: existingEvaluation ? 'Player evaluation updated successfully' : 'Player evaluation created successfully',
         data: {
-          evaluation: evaluation.toJSON(),
-          isNewEvaluation: !existingEvaluation,
-          version: evaluation.evaluationVersion
+          evaluation: newEvaluation.toJSON(),
+          player: {
+            id: playerProfile.id,
+            name: `${playerProfile.user.firstName} ${playerProfile.user.lastName}`,
+            college: playerProfile.college?.name
+          },
+          metadata: {
+            version: newEvaluation.evaluationVersion,
+            isUpdate: !!existingEvaluation,
+            evaluationDate: newEvaluation.evaluationDate
+          }
         }
       });
 
@@ -250,20 +395,16 @@ class NJCAACoachController {
       await transaction.rollback();
       console.error('Player evaluation error:', error);
       
-      if (error.name === 'SequelizeValidationError') {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Validation error in evaluation data',
-          errors: error.errors.map(err => ({
-            field: err.path,
-            message: err.message
-          }))
-        });
-      }
-
+      // Logging détaillé pour le debugging
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
       return res.status(500).json({
         status: 'error',
-        message: 'Failed to save player evaluation',
+        message: 'Failed to create/update player evaluation',
         code: 'EVALUATION_ERROR'
       });
     }
@@ -271,9 +412,6 @@ class NJCAACoachController {
 
   /**
    * 📖 Récupération d'une évaluation existante
-   * 
-   * Cette méthode permet au coach de consulter l'évaluation actuelle
-   * d'un de ses joueurs, utile pour pré-remplir le formulaire d'évaluation.
    */
   static async getPlayerEvaluation(req, res) {
     try {
@@ -282,25 +420,23 @@ class NJCAACoachController {
 
       console.log(`📖 Retrieving evaluation for player ${playerId} by coach ${req.user.email}`);
 
-      // Vérifier que le coach a le droit de voir cette évaluation
-      const coachProfile = await NJCAACoachController.validateCoachPlayerRelationship(
+      const validationResult = await NJCAACoachController.validateCoachPlayerRelationship(
         coachUserId, 
         playerId
       );
 
-      if (!coachProfile.canEvaluate) {
+      if (!validationResult.canEvaluate) {
         return res.status(403).json({
           status: 'error',
-          message: coachProfile.reason,
+          message: validationResult.reason,
           code: 'EVALUATION_ACCESS_DENIED'
         });
       }
 
-      // Récupérer l'évaluation actuelle
       const evaluation = await PlayerEvaluation.findOne({
         where: {
           playerId: parseInt(playerId),
-          coachId: coachProfile.id,
+          coachId: validationResult.coachProfile.id,
           isCurrent: true
         },
         include: [
@@ -349,261 +485,12 @@ class NJCAACoachController {
   }
 
   /**
-   * 📊 Page "Settings" - Gestion du profil personnel
-   * 
-   * Cette méthode implémente la deuxième page du dashboard selon tes spécifications.
-   * Elle permet au coach de gérer ses paramètres de compte.
-   */
-  static async getSettings(req, res) {
-    try {
-      const userId = req.user.id;
-
-      console.log(`⚙️ Loading settings for NJCAA coach: ${req.user.email}`);
-
-      // Récupérer le profil complet avec toutes les informations
-      const coachProfile = await NJCAACoachProfile.findOne({
-        where: { userId: userId },
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt', 'lastLogin']
-          },
-          {
-            model: NJCAACollege,
-            as: 'college',
-            attributes: ['id', 'name', 'state', 'region']
-          }
-        ]
-      });
-
-      if (!coachProfile) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Coach profile not found',
-          code: 'COACH_PROFILE_NOT_FOUND'
-        });
-      }
-
-      // Calculer des statistiques d'activité pour la page settings
-      const activityStats = {
-        totalEvaluations: coachProfile.totalEvaluations,
-        lastEvaluationDate: coachProfile.lastEvaluationDate,
-        accountCreatedDate: coachProfile.user.createdAt,
-        lastLoginDate: coachProfile.user.lastLogin
-      };
-
-      return res.json({
-        status: 'success',
-        data: {
-          profile: coachProfile.toJSON(),
-          user: coachProfile.user,
-          college: coachProfile.college,
-          activityStats: activityStats,
-          editableFields: {
-            // Champs que le coach peut modifier dans les settings
-            phoneNumber: true,
-            position: false, // Nécessite validation admin
-            teamSport: false, // Nécessite validation admin
-            college: false, // Nécessite validation admin
-            division: false // Nécessite validation admin
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Get settings error:', error);
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to load settings',
-        code: 'SETTINGS_ERROR'
-      });
-    }
-  }
-
-  /**
-   * ✏️ Mise à jour des paramètres du profil
-   * 
-   * Permet au coach de modifier certains champs de son profil.
-   * Certains champs nécessitent une validation admin et ne sont pas modifiables ici.
-   */
-  static async updateSettings(req, res) {
-    try {
-      const userId = req.user.id;
-      const updateData = req.body;
-
-      console.log(`✏️ Updating settings for NJCAA coach: ${req.user.email}`);
-
-      // Récupérer le profil actuel
-      const coachProfile = await NJCAACoachProfile.findOne({
-        where: { userId: userId }
-      });
-
-      if (!coachProfile) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Coach profile not found',
-          code: 'COACH_PROFILE_NOT_FOUND'
-        });
-      }
-
-      // Filtrer les champs modifiables (sécurité)
-      const allowedFields = ['phoneNumber'];
-      const filteredData = {};
-      
-      allowedFields.forEach(field => {
-        if (updateData[field] !== undefined) {
-          filteredData[field] = updateData[field];
-        }
-      });
-
-      if (Object.keys(filteredData).length === 0) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'No valid fields provided for update',
-          code: 'NO_VALID_FIELDS'
-        });
-      }
-
-      // Effectuer la mise à jour
-      await coachProfile.update(filteredData);
-
-      console.log(`✅ Settings updated successfully for coach ${userId}`);
-
-      return res.json({
-        status: 'success',
-        message: 'Settings updated successfully',
-        data: {
-          updatedFields: Object.keys(filteredData),
-          profile: coachProfile.toJSON()
-        }
-      });
-
-    } catch (error) {
-      console.error('Update settings error:', error);
-      
-      if (error.name === 'SequelizeValidationError') {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Validation error in settings data',
-          errors: error.errors.map(err => ({
-            field: err.path,
-            message: err.message
-          }))
-        });
-      }
-
-      return res.status(500).json({
-        status: 'error',
-        message: 'Failed to update settings',
-        code: 'UPDATE_SETTINGS_ERROR'
-      });
-    }
-  }
-
-  /**
-   * 🔍 MÉTHODE UTILITAIRE : Validation de la relation coach-joueur
-   * 
-   * Cette méthode critique vérifie qu'un coach NJCAA a le droit d'évaluer
-   * un joueur spécifique. Elle implémente les règles métier de sécurité.
-   * 
-   * RÈGLES MÉTIER :
-   * 1. Le coach et le joueur doivent être du même college
-   * 2. Le genre du joueur doit correspondre à l'équipe du coach
-   * 3. Le joueur doit avoir un profil actif et visible
-   */
-  static async validateCoachPlayerRelationship(coachUserId, playerId, transaction = null) {
-    try {
-      // Récupérer le profil du coach
-      const coachProfile = await NJCAACoachProfile.findOne({
-        where: { userId: coachUserId },
-        transaction
-      });
-
-      if (!coachProfile) {
-        return {
-          canEvaluate: false,
-          reason: 'Coach profile not found',
-          id: null
-        };
-      }
-
-      // Récupérer le profil du joueur avec ses relations
-      const playerProfile = await PlayerProfile.findByPk(playerId, {
-        include: [{
-          model: User,
-          as: 'user',
-          attributes: ['isActive']
-        }],
-        transaction
-      });
-
-      if (!playerProfile) {
-        return {
-          canEvaluate: false,
-          reason: 'Player profile not found',
-          id: coachProfile.id
-        };
-      }
-
-      // Vérifier que le joueur est actif
-      if (!playerProfile.user.isActive || !playerProfile.isProfileVisible) {
-        return {
-          canEvaluate: false,
-          reason: 'Player profile is not active or visible',
-          id: coachProfile.id
-        };
-      }
-
-      // RÈGLE MÉTIER CRUCIALE : Même college
-      if (playerProfile.collegeId !== coachProfile.collegeId) {
-        return {
-          canEvaluate: false,
-          reason: 'Coach and player are not from the same college',
-          id: coachProfile.id
-        };
-      }
-
-      // RÈGLE MÉTIER CRUCIALE : Correspondance genre
-      const expectedGender = coachProfile.teamSport === 'mens_soccer' ? 'male' : 'female';
-      if (playerProfile.gender !== expectedGender) {
-        return {
-          canEvaluate: false,
-          reason: `Coach manages ${coachProfile.teamSport} but player is ${playerProfile.gender}`,
-          id: coachProfile.id
-        };
-      }
-
-      // Toutes les vérifications passées
-      return {
-        canEvaluate: true,
-        reason: 'Validation successful',
-        id: coachProfile.id,
-        coachProfile: coachProfile,
-        playerProfile: playerProfile
-      };
-
-    } catch (error) {
-      console.error('Coach-player relationship validation error:', error);
-      return {
-        canEvaluate: false,
-        reason: 'Validation error occurred',
-        id: null
-      };
-    }
-  }
-
-  /**
    * 📈 Historique des évaluations effectuées par le coach
-   * 
-   * Cette méthode optionnelle permet au coach de voir toutes ses évaluations
-   * passées, utile pour le suivi et les rapports.
    */
   static async getEvaluationHistory(req, res) {
     try {
       const coachUserId = req.user.id;
 
-      // Récupérer le profil du coach
       const coachProfile = await NJCAACoachProfile.findOne({
         where: { userId: coachUserId }
       });
@@ -616,7 +503,6 @@ class NJCAACoachController {
         });
       }
 
-      // Récupérer toutes les évaluations du coach (actuelles et historiques)
       const evaluations = await PlayerEvaluation.findAll({
         where: { coachId: coachProfile.id },
         include: [
@@ -636,7 +522,6 @@ class NJCAACoachController {
         ]
       });
 
-      // Grouper par joueur pour un affichage plus clair
       const evaluationsByPlayer = {};
       evaluations.forEach(evaluation => {
         const playerId = evaluation.playerId;
@@ -669,6 +554,95 @@ class NJCAACoachController {
         message: 'Failed to retrieve evaluation history',
         code: 'EVALUATION_HISTORY_ERROR'
       });
+    }
+  }
+
+  /**
+   * 🔍 MÉTHODE UTILITAIRE : Validation de la relation coach-joueur
+   */
+  static async validateCoachPlayerRelationship(coachUserId, playerId, transaction = null) {
+    try {
+      // Récupérer le profil du coach
+      const coachProfile = await NJCAACoachProfile.findOne({
+        where: { userId: coachUserId },
+        include: [{
+          model: User,
+          as: 'user',
+          attributes: ['email']
+        }],
+        transaction
+      });
+
+      if (!coachProfile) {
+        return {
+          canEvaluate: false,
+          reason: 'Coach profile not found'
+        };
+      }
+
+      // Récupérer le profil du joueur
+      const playerProfile = await PlayerProfile.findOne({
+        where: { id: playerId },
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['firstName', 'lastName', 'isActive']
+          },
+          {
+            model: NJCAACollege,
+            as: 'college',
+            attributes: ['name']
+          }
+        ],
+        transaction
+      });
+
+      if (!playerProfile) {
+        return {
+          canEvaluate: false,
+          reason: 'Player not found'
+        };
+      }
+
+      // VALIDATION 1 : Le joueur doit être actif et visible
+      if (!playerProfile.user.isActive || !playerProfile.isProfileVisible) {
+        return {
+          canEvaluate: false,
+          reason: 'Player profile is not active or visible'
+        };
+      }
+
+      // VALIDATION 2 : Même college
+      if (playerProfile.collegeId !== coachProfile.collegeId) {
+        return {
+          canEvaluate: false,
+          reason: 'Coach and player must be from the same college'
+        };
+      }
+
+      // VALIDATION 3 : Genre correspondant à l'équipe du coach
+      const expectedGender = coachProfile.teamSport === 'mens_soccer' ? 'male' : 'female';
+      if (playerProfile.gender !== expectedGender) {
+        return {
+          canEvaluate: false,
+          reason: `Coach for ${coachProfile.teamSport} can only evaluate ${expectedGender} players`
+        };
+      }
+
+      // ✅ Toutes les validations passées
+      return {
+        canEvaluate: true,
+        coachProfile: coachProfile,
+        playerProfile: playerProfile
+      };
+
+    } catch (error) {
+      console.error('Validation error:', error);
+      return {
+        canEvaluate: false,
+        reason: 'Validation system error'
+      };
     }
   }
 }
