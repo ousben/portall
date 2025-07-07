@@ -1,84 +1,70 @@
 // portall/server/routes/njcaaCoaches.js
 
 const express = require('express');
-const NJCAACoachController = require('../controllers/njcaaCoachController');
-const { authenticate, authorize } = require('../middleware/auth');
-const { validatePlayerEvaluation } = require('../middleware/advancedValidation');
-const { generalAuthLimiter } = require('../middleware/rateLimiting');
-const Joi = require('joi');
-
 const router = express.Router();
+const Joi = require('joi');
+const NJCAACoachController = require('../controllers/njcaaCoachController');
+const { authenticate, requireNJCAACoachAccess } = require('../middleware/auth');
+const { generalAuthLimiter } = require('../middleware/rateLimiter');
+const { validatePlayerEvaluation } = require('../middleware/playerEvaluationValidation'); // ✅ IMPORT CORRIGÉ
 
 /**
- * Routes spécialisées pour les coachs NJCAA
+ * 🏟️ Routes dédiées aux coachs NJCAA
  * 
- * ARCHITECTURE PÉDAGOGIQUE : Ces routes illustrent parfaitement comment structurer
- * une API REST selon les domaines métier. Chaque endpoint correspond à une fonctionnalité
- * spécifique du workflow des coachs NJCAA que tu as défini dans tes spécifications.
+ * Ces routes implémentent l'interface spécialisée pour les coachs NJCAA,
+ * leur permettant d'évaluer les joueurs de leur college selon des critères
+ * précis définis dans le système de recrutement sportif.
  * 
- * CONCEPTS ENSEIGNÉS :
- * 1. SÉPARATION DES RESPONSABILITÉS : Routes = Interface HTTP, Controller = Logique métier
- * 2. MIDDLEWARE EN CASCADE : Chaque requête passe par plusieurs couches de validation
- * 3. CONVENTIONS REST : GET pour lire, POST pour créer, PUT pour modifier
- * 4. SÉCURITÉ MULTICOUCHE : Authentification + Autorisation + Validation + Rate limiting
+ * 🔐 SÉCURITÉ : Toutes les routes requièrent une authentification valide
+ * ET une autorisation spécifique NJCAA coach pour garantir que seuls
+ * les coachs autorisés peuvent accéder aux fonctionnalités d'évaluation.
  * 
- * Cette approche modulaire facilite la maintenance et l'évolution future de l'API.
+ * 📊 FONCTIONNALITÉS PRINCIPALES :
+ * - Dashboard avec filtrage intelligent des joueurs
+ * - Système d'évaluation complet avec 11 critères
+ * - Gestion des settings de profil
+ * - Historique des évaluations
+ * 
+ * 🎯 ARCHITECTURE : Routes RESTful avec validation robuste et middleware
+ * de sécurité en cascade pour une expérience utilisateur optimale.
  */
 
 // ========================
-// MIDDLEWARE D'AUTORISATION SPÉCIALISÉ
-// ========================
-
-/**
- * Middleware pour vérifier que l'utilisateur est bien un coach NJCAA
- * 
- * EXPLICATION PÉDAGOGIQUE : Ce middleware illustre le principe de responsabilité unique.
- * Au lieu de vérifier le type d'utilisateur dans chaque contrôleur, nous le faisons
- * une seule fois ici, gardant les contrôleurs focalisés sur la logique métier.
- * 
- * C'est un excellent exemple de "fail fast" - nous rejetons les requêtes non autorisées
- * le plus tôt possible dans le pipeline, économisant les ressources serveur.
- */
-const requireNJCAACoachAccess = (req, res, next) => {
-  if (req.user.userType !== 'njcaa_coach') {
-    return res.status(403).json({
-      status: 'error',
-      message: 'Access denied. This endpoint is only available to NJCAA coaches.',
-      code: 'NJCAA_COACH_ACCESS_REQUIRED'
-    });
-  }
-  next();
-};
-
-// ========================
-// ROUTES DU DASHBOARD PRINCIPAL
+// ROUTES PRINCIPALES DU DASHBOARD
 // ========================
 
 /**
  * GET /api/njcaa-coaches/dashboard
  * 
- * Page principale du coach NJCAA avec la liste de ses joueurs
+ * Dashboard principal pour les coachs NJCAA
  * 
- * EXPLICATION : Cette route implémente ta "Main Page" avec toutes ses fonctionnalités :
- * - Liste dynamique des joueurs du même college et genre
- * - Statuts d'évaluation pour chaque joueur
- * - Statistiques d'activité du coach
- * - Interface pour démarrer les évaluations
+ * Cette route fournit une vue d'ensemble complète des joueurs que le coach
+ * peut évaluer, avec un filtrage intelligent basé sur :
+ * - Le même college que le coach
+ * - Le même genre (masculine/féminine) selon l'équipe du coach
+ * - Les évaluations existantes et leur statut
+ * 
+ * LOGIQUE MÉTIER : Un coach masculin ne voit que les joueurs masculins
+ * de son college, et vice versa pour les coachs féminins.
  */
 router.get('/dashboard',
-  authenticate, // COUCHE 1 : Utilisateur connecté ?
-  requireNJCAACoachAccess, // COUCHE 2 : Type d'utilisateur correct ?
-  generalAuthLimiter, // COUCHE 3 : Limite de fréquence respectée ?
-  NJCAACoachController.getDashboard // COUCHE 4 : Logique métier
+  authenticate,
+  requireNJCAACoachAccess,
+  generalAuthLimiter,
+  NJCAACoachController.getDashboard
 );
+
+// ========================
+// ROUTES DE GESTION DU PROFIL
+// ========================
 
 /**
  * GET /api/njcaa-coaches/settings
  * 
- * Page "Settings" pour la gestion du profil personnel
+ * Récupérer les paramètres actuels du profil coach
  * 
- * CONCEPT : Cette route montre comment séparer les préoccupations entre
- * dashboard (données métier) et settings (configuration personnelle).
+ * USAGE : Cette route permet de pré-remplir le formulaire de settings
+ * côté client, améliorant l'expérience utilisateur.
  */
 router.get('/settings',
   authenticate,
@@ -90,38 +76,43 @@ router.get('/settings',
 /**
  * PUT /api/njcaa-coaches/settings
  * 
- * Mise à jour des paramètres modifiables du profil
+ * Mettre à jour les paramètres du profil coach
  * 
- * SÉCURITÉ : Cette route inclut une validation Joi inline pour démontrer
- * comment sécuriser les modifications de données sensibles.
+ * VALIDATION : Seuls certains champs peuvent être modifiés par le coach.
+ * Les champs critiques comme collegeId et teamSport sont protégés.
  */
 router.put('/settings',
   authenticate,
   requireNJCAACoachAccess,
   generalAuthLimiter,
-  // VALIDATION INLINE : Exemple de validation spécialisée pour un endpoint unique
+  // Validation des données de mise à jour
   (req, res, next) => {
     const updateSchema = Joi.object({
       phoneNumber: Joi.string()
-        .pattern(/^\+?[\d\s\-\(\)]+$/)
-        .min(10)
-        .max(20)
+        .pattern(/^\+?[1-9]\d{1,14}$/)
         .optional()
         .messages({
-          'string.pattern.base': 'Please provide a valid phone number',
-          'string.min': 'Phone number must be at least 10 characters',
-          'string.max': 'Phone number must not exceed 20 characters'
+          'string.pattern.base': 'Please provide a valid phone number'
+        }),
+      
+      // Autres champs modifiables peuvent être ajoutés ici
+      bio: Joi.string()
+        .max(500)
+        .optional()
+        .messages({
+          'string.max': 'Bio must not exceed 500 characters'
         })
     }).options({
-      abortEarly: false,
-      stripUnknown: true
+      stripUnknown: true, // Supprimer les champs non autorisés
+      abortEarly: false
     });
 
     const { error, value } = updateSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
         status: 'error',
-        message: 'Validation error in settings update',
+        message: 'Settings validation failed',
+        code: 'SETTINGS_VALIDATION_ERROR',
         errors: error.details.map(detail => ({
           field: detail.path.join('.'),
           message: detail.message
@@ -205,7 +196,7 @@ router.post('/players/:playerId/evaluation',
     req.params = value;
     next();
   },
-  validatePlayerEvaluation, // VALIDATION MÉTIER : Toutes les questions d'évaluation
+  validatePlayerEvaluation, // ✅ MIDDLEWARE CORRECT
   NJCAACoachController.evaluatePlayer
 );
 

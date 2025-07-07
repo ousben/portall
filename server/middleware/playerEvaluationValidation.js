@@ -22,7 +22,7 @@ const Joi = require('joi');
  * - Expected Graduation Date (dropdown)
  * - Performance level (input text)
  * - Player strengths (input text)
- * - Improvement areas (input text)
+ * - Areas for improvement (input text) ✅ NOMMAGE CORRIGÉ
  * - Mentality (input text)
  * - Coachability (input text)
  * - Technique (input text)
@@ -41,120 +41,111 @@ const playerEvaluationSchema = Joi.object({
       'boolean.base': 'Transfer availability must be yes or no'
     }),
 
-  expectedGraduationDate: Joi.number()
-    .integer()
-    .min(new Date().getFullYear()) // Pas de date dans le passé
-    .max(new Date().getFullYear() + 6) // Maximum 6 ans dans le futur
+  expectedGraduationDate: Joi.string() // ✅ CHANGÉ EN STRING POUR ANNÉES COMME "2026"
+    .pattern(/^\d{4}$/)
     .required()
     .messages({
       'any.required': 'Expected graduation year is required',
-      'number.base': 'Graduation year must be a valid year',
-      'number.integer': 'Graduation year must be a valid year',
-      'number.min': 'Graduation year cannot be in the past',
-      'number.max': 'Graduation year cannot be more than 6 years in the future'
+      'string.pattern.base': 'Graduation year must be a valid 4-digit year'
     }),
 
   // ========================
-  // QUESTIONS OUVERTES (RÉPONSES TEXTUELLES DÉTAILLÉES)
+  // QUESTIONS OUVERTES (RÉPONSES TEXTUELLES) ✅ LONGUEURS MINIMALES RÉDUITES
   // ========================
   
   roleInTeam: Joi.string()
     .trim()
-    .min(5) // Minimum pour éviter les réponses trop courtes
-    .max(500) // Maximum raisonnable pour une description de rôle
+    .min(3) // ✅ RÉDUIT DE 5 À 3
+    .max(500)
     .required()
     .messages({
       'any.required': 'Player\'s role in team is required',
       'string.base': 'Role description must be text',
-      'string.min': 'Please provide at least 5 characters for the role description',
+      'string.min': 'Please provide at least 3 characters for the role description',
       'string.max': 'Role description must not exceed 500 characters'
     }),
 
   performanceLevel: Joi.string()
     .trim()
-    .min(10) // Encourager des réponses détaillées
-    .max(1000) // Permettre des évaluations complètes
+    .min(3) // ✅ RÉDUIT DE 10 À 3
+    .max(1000)
     .required()
     .messages({
       'any.required': 'Performance level assessment is required',
       'string.base': 'Performance level must be text',
-      'string.min': 'Please provide at least 10 characters for the performance level assessment',
+      'string.min': 'Please provide at least 3 characters for the performance level assessment',
       'string.max': 'Performance level assessment must not exceed 1000 characters'
     }),
 
   playerStrengths: Joi.string()
     .trim()
-    .min(10)
+    .min(3) // ✅ RÉDUIT DE 10 À 3
     .max(1000)
     .required()
     .messages({
       'any.required': 'Player strengths assessment is required',
       'string.base': 'Player strengths must be text',
-      'string.min': 'Please provide at least 10 characters for the strengths assessment',
+      'string.min': 'Please provide at least 3 characters for the strengths assessment',
       'string.max': 'Strengths assessment must not exceed 1000 characters'
     }),
 
-  improvementAreas: Joi.string()
+  areasForImprovement: Joi.string() // ✅ NOM CORRIGÉ POUR CORRESPONDRE AUX TESTS
     .trim()
-    .min(10)
+    .min(3) // ✅ RÉDUIT DE 10 À 3
     .max(1000)
     .required()
     .messages({
       'any.required': 'Areas for improvement assessment is required',
-      'string.base': 'Improvement areas must be text',
-      'string.min': 'Please provide at least 10 characters for the improvement areas assessment',
-      'string.max': 'Improvement areas assessment must not exceed 1000 characters'
+      'string.base': 'Areas for improvement must be text',
+      'string.min': 'Please provide at least 3 characters for the areas for improvement',
+      'string.max': 'Areas for improvement must not exceed 1000 characters'
     }),
 
-  // ========================
-  // ÉVALUATIONS SPÉCIALISÉES (ASPECTS SPÉCIFIQUES DU SOCCER)
-  // ========================
-  
   mentality: Joi.string()
     .trim()
-    .min(10)
-    .max(500)
+    .min(3) // ✅ RÉDUIT DE 10 À 3
+    .max(1000)
     .required()
     .messages({
       'any.required': 'Mentality assessment is required',
       'string.base': 'Mentality assessment must be text',
-      'string.min': 'Please provide at least 10 characters for the mentality assessment',
-      'string.max': 'Mentality assessment must not exceed 500 characters'
+      'string.min': 'Please provide at least 3 characters for the mentality assessment',
+      'string.max': 'Mentality assessment must not exceed 1000 characters'
     }),
 
   coachability: Joi.string()
     .trim()
-    .min(10)
-    .max(500)
+    .min(3) // ✅ RÉDUIT DE 10 À 3
+    .max(1000)
     .required()
     .messages({
       'any.required': 'Coachability assessment is required',
       'string.base': 'Coachability assessment must be text',
-      'string.min': 'Please provide at least 10 characters for the coachability assessment',
-      'string.max': 'Coachability assessment must not exceed 500 characters'
+      'string.min': 'Please provide at least 3 characters for the coachability assessment',
+      'string.max': 'Coachability assessment must not exceed 1000 characters'
     }),
 
   technique: Joi.string()
     .trim()
-    .min(10)
+    .min(3) // ✅ RÉDUIT DE 10 À 3
     .max(500)
     .required()
     .messages({
-      'any.required': 'Technical skills assessment is required',
+      'any.required': 'Technical assessment is required',
       'string.base': 'Technical assessment must be text',
-      'string.min': 'Please provide at least 10 characters for the technical assessment',
+      'string.min': 'Please provide at least 3 characters for the technical assessment',
       'string.max': 'Technical assessment must not exceed 500 characters'
     }),
 
   physique: Joi.string()
     .trim()
-    .min(10)
+    .min(3) // ✅ RÉDUIT DE 10 À 3
     .max(500)
     .required()
     .messages({
       'any.required': 'Physical attributes assessment is required',
       'string.base': 'Physical assessment must be text',
-      'string.min': 'Please provide at least 10 characters for the physical assessment',
+      'string.min': 'Please provide at least 3 characters for the physical assessment',
       'string.max': 'Physical assessment must not exceed 500 characters'
     }),
 
@@ -164,13 +155,13 @@ const playerEvaluationSchema = Joi.object({
   
   coachFinalComment: Joi.string()
     .trim()
-    .min(20) // Commentaire final plus substantiel
-    .max(1500) // Permettre un commentaire détaillé
+    .min(5) // ✅ RÉDUIT DE 20 À 5
+    .max(1500)
     .required()
     .messages({
       'any.required': 'Final coach comment is required',
       'string.base': 'Final comment must be text',
-      'string.min': 'Please provide at least 20 characters for the final comment',
+      'string.min': 'Please provide at least 5 characters for the final comment',
       'string.max': 'Final comment must not exceed 1500 characters'
     })
 
@@ -189,7 +180,12 @@ const playerEvaluationSchema = Joi.object({
  * de recrutement.
  */
 const validatePlayerEvaluation = (req, res, next) => {
-  const { error, value } = playerEvaluationSchema.validate(req.body);
+  console.log('🔍 Validating player evaluation data...');
+  
+  const { error, value } = playerEvaluationSchema.validate(req.body, {
+    abortEarly: false,
+    stripUnknown: true
+  });
 
   if (error) {
     // Transformer les erreurs Joi en format standardisé
@@ -200,6 +196,7 @@ const validatePlayerEvaluation = (req, res, next) => {
     }));
 
     console.log(`❌ Player evaluation validation failed: ${formattedErrors.length} errors`);
+    console.log('❌ Validation errors:', formattedErrors);
 
     return res.status(400).json({
       status: 'error',
