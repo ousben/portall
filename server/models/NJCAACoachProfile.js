@@ -110,7 +110,7 @@ module.exports = (sequelize, DataTypes) => {
 
   // Récupérer les joueurs de ce coach (même college + même genre)
   NJCAACoachProfile.prototype.getMyPlayers = async function() {
-    const { PlayerProfile, User, NJCAACollege } = require('../models');
+    const { PlayerProfile, User } = require('./index');
     
     // Déterminer le genre des joueurs selon l'équipe du coach
     const playerGender = this.teamSport === 'mens_soccer' ? 'male' : 'female';
@@ -126,14 +126,9 @@ module.exports = (sequelize, DataTypes) => {
           model: User,
           as: 'user',
           attributes: ['id', 'firstName', 'lastName', 'email', 'isActive']
-        },
-        {
-          model: NJCAACollege,
-          as: 'college',
-          attributes: ['id', 'name', 'state']
         }
       ],
-      order: [['created_at', 'DESC']]
+      order: [['createdAt', 'DESC']]
     });
   };
 
@@ -143,7 +138,7 @@ module.exports = (sequelize, DataTypes) => {
     return values;
   };
 
-  // Associations
+  // ✅ ASSOCIATIONS CORRIGÉES
   NJCAACoachProfile.associate = function(models) {
     // Relation 1:1 avec User
     NJCAACoachProfile.belongsTo(models.User, {
@@ -157,9 +152,9 @@ module.exports = (sequelize, DataTypes) => {
       as: 'college'
     });
 
-    // Relation 1:N avec PlayerEvaluation
+    // ✅ CORRECTION : Utiliser la bonne clé étrangère
     NJCAACoachProfile.hasMany(models.PlayerEvaluation, {
-      foreignKey: 'coachId',
+      foreignKey: 'njcaaCoachProfileId',
       as: 'evaluations'
     });
   };

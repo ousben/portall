@@ -1,20 +1,6 @@
-// portall/server/migrations/20250706000003-create-player-evaluations.js
+// portall/server/migrations/20250706075723-create-player-evaluations.js
 
 'use strict';
-
-/**
- * Migration pour créer la table des évaluations de joueurs
- * 
- * Cette table stocke les évaluations objectives des joueurs NJCAA
- * effectuées par leurs coachs. Ces évaluations servent aux coachs
- * NCAA/NAIA pour le recrutement.
- * 
- * Logique métier :
- * - Un coach NJCAA peut évaluer ses joueurs
- * - Une évaluation = ensemble de critères objectifs + commentaires
- * - Les évaluations sont visibles aux coachs NCAA/NAIA recruteurs
- * - Historique des évaluations conservé (versioning)
- */
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
@@ -33,7 +19,8 @@ module.exports = {
         comment: 'Identifiant unique de l\'évaluation'
       },
 
-      player_id: {
+      // ✅ CORRECTION : Noms cohérents avec le modèle et contrôleur
+      player_profile_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -45,7 +32,7 @@ module.exports = {
         comment: 'Joueur évalué'
       },
 
-      coach_id: {
+      njcaa_coach_profile_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -58,19 +45,127 @@ module.exports = {
       },
 
       // ========================
-      // CRITÈRES D'ÉVALUATION SELON SPÉCIFICATIONS
+      // CRITÈRES D'ÉVALUATION TECHNIQUES (1-10)
       // ========================
       
+      speed: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Vitesse du joueur (1-10)'
+      },
+
+      agility: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Agilité du joueur (1-10)'
+      },
+
+      ball_control: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Contrôle de balle (1-10)'
+      },
+
+      passing: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Capacité de passe (1-10)'
+      },
+
+      shooting: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Précision de tir (1-10)'
+      },
+
+      defending: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Capacité défensive (1-10)'
+      },
+
+      game_intelligence: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Intelligence de jeu (1-10)'
+      },
+
+      work_ethic: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Éthique de travail (1-10)'
+      },
+
+      physical_fitness: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Condition physique (1-10)'
+      },
+
+      leadership: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Leadership (1-10)'
+      },
+
+      overall_score: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        validate: {
+          min: 1,
+          max: 10
+        },
+        comment: 'Note globale (1-10)'
+      },
+
+      // ========================
+      // INFORMATIONS MÉTIER
+      // ========================
+
       available_to_transfer: {
         type: Sequelize.BOOLEAN,
         allowNull: false,
         comment: 'Le joueur est-il disponible pour un transfert ?'
-      },
-
-      role_in_team: {
-        type: Sequelize.TEXT,
-        allowNull: false,
-        comment: 'Rôle du joueur dans l\'équipe'
       },
 
       expected_graduation_date: {
@@ -83,46 +178,26 @@ module.exports = {
         comment: 'Année de diplôme prévue'
       },
 
-      performance_level: {
-        type: Sequelize.TEXT,
-        allowNull: false,
-        comment: 'À quel niveau le coach pense que le joueur peut performer'
-      },
+      // ========================
+      // COMMENTAIRES TEXTUELS
+      // ========================
 
-      player_strengths: {
+      coachability_comment: {
         type: Sequelize.TEXT,
         allowNull: false,
-        comment: 'Points forts du joueur'
-      },
-
-      improvement_areas: {
-        type: Sequelize.TEXT,
-        allowNull: false,
-        comment: 'Domaines à améliorer'
-      },
-
-      mentality: {
-        type: Sequelize.TEXT,
-        allowNull: false,
-        comment: 'Évaluation de la mentalité du joueur'
-      },
-
-      coachability: {
-        type: Sequelize.TEXT,
-        allowNull: false,
-        comment: 'Capacité du joueur à être coaché'
+        comment: 'Commentaire sur la capacité à être coaché'
       },
 
       technique: {
         type: Sequelize.TEXT,
         allowNull: false,
-        comment: 'Évaluation technique du joueur'
+        comment: 'Évaluation technique détaillée'
       },
 
       physique: {
         type: Sequelize.TEXT,
         allowNull: false,
-        comment: 'Évaluation physique du joueur'
+        comment: 'Évaluation physique détaillée'
       },
 
       coach_final_comment: {
@@ -142,13 +217,6 @@ module.exports = {
         comment: 'Version de l\'évaluation (pour historique)'
       },
 
-      is_current: {
-        type: Sequelize.BOOLEAN,
-        allowNull: false,
-        defaultValue: true,
-        comment: 'Cette évaluation est-elle la plus récente ?'
-      },
-
       evaluation_date: {
         type: Sequelize.DATE,
         allowNull: false,
@@ -163,15 +231,13 @@ module.exports = {
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
-        comment: 'Date de création en base'
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
       },
 
       updated_at: {
         allowNull: false,
         type: Sequelize.DATE,
-        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
-        comment: 'Date de dernière modification'
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
       }
     });
 
@@ -181,40 +247,29 @@ module.exports = {
     
     console.log('📊 Creating indexes for player evaluations...');
 
-    // Index sur player_id (essentiel pour récupérer les évaluations d'un joueur)
+    // Index sur player_profile_id
     await queryInterface.addIndex('player_evaluations', {
-      fields: ['player_id'],
-      name: 'idx_player_evaluations_player_id',
-      comment: 'Accélère les recherches d\'évaluations par joueur'
+      fields: ['player_profile_id'],
+      name: 'idx_player_evaluations_player_profile_id'
     });
 
-    // Index sur coach_id (pour voir toutes les évaluations d'un coach)
+    // Index sur njcaa_coach_profile_id
     await queryInterface.addIndex('player_evaluations', {
-      fields: ['coach_id'],
-      name: 'idx_player_evaluations_coach_id',
-      comment: 'Accélère les recherches d\'évaluations par coach'
+      fields: ['njcaa_coach_profile_id'],
+      name: 'idx_player_evaluations_njcaa_coach_profile_id'
     });
 
-    // Index sur is_current (pour récupérer seulement les évaluations actuelles)
+    // Index unique pour éviter les doublons
     await queryInterface.addIndex('player_evaluations', {
-      fields: ['is_current'],
-      name: 'idx_player_evaluations_current',
-      comment: 'Accélère les recherches d\'évaluations actuelles'
+      fields: ['player_profile_id', 'njcaa_coach_profile_id'],
+      unique: true,
+      name: 'unique_evaluation_per_player_coach'
     });
 
-    // Index composite crucial : player + current
-    // Optimise : "Quelle est l'évaluation actuelle de ce joueur ?"
+    // Index pour la disponibilité de transfert
     await queryInterface.addIndex('player_evaluations', {
-      fields: ['player_id', 'is_current'],
-      name: 'idx_player_evaluations_player_current',
-      comment: 'Optimise la recherche de l\'évaluation actuelle d\'un joueur'
-    });
-
-    // Index pour la disponibilité de transfert (recherche importante pour recruteurs)
-    await queryInterface.addIndex('player_evaluations', {
-      fields: ['available_to_transfer', 'is_current'],
-      name: 'idx_player_evaluations_transfer_available',
-      comment: 'Optimise la recherche de joueurs disponibles au transfert'
+      fields: ['available_to_transfer'],
+      name: 'idx_player_evaluations_transfer_available'
     });
 
     console.log('✅ Player evaluations table created successfully');

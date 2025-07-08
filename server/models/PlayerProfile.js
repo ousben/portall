@@ -4,7 +4,6 @@
 
 module.exports = (sequelize, DataTypes) => {
   const PlayerProfile = sequelize.define('PlayerProfile', {
-    // Clé étrangère vers User
     userId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -16,16 +15,50 @@ module.exports = (sequelize, DataTypes) => {
       field: 'user_id'
     },
     
-    // Informations personnelles étendues
-    gender: {
-      type: DataTypes.ENUM('male', 'female'),
+    dateOfBirth: {
+      type: DataTypes.DATEONLY,
       allowNull: false,
+      field: 'date_of_birth',
       validate: {
-        isIn: [['male', 'female']]
+        isDate: true,
+        isBefore: new Date().toISOString().split('T')[0]
       }
     },
     
-    // Relation avec le college NJCAA
+    height: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 140,
+        max: 220
+      },
+      comment: 'Height in centimeters'
+    },
+    
+    weight: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: 40,
+        max: 150
+      },
+      comment: 'Weight in kilograms'
+    },
+    
+    position: {
+      type: DataTypes.ENUM(
+        'goalkeeper', 'defender', 'midfielder', 'forward',
+        'center_back', 'full_back', 'wing_back', 'defensive_midfielder',
+        'central_midfielder', 'attacking_midfielder', 'winger', 'striker'
+      ),
+      allowNull: false
+    },
+    
+    gender: {
+      type: DataTypes.ENUM('male', 'female'),
+      allowNull: false
+    },
+    
     collegeId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -36,30 +69,32 @@ module.exports = (sequelize, DataTypes) => {
       field: 'college_id'
     },
     
-    // Statuts du profil joueur
-    profileCompletionStatus: {
-      type: DataTypes.ENUM('basic', 'completed', 'premium'),
-      defaultValue: 'basic',
-      field: 'profile_completion_status'
+    currentYear: {
+      type: DataTypes.ENUM('freshman', 'sophomore', 'junior', 'senior'),
+      allowNull: false,
+      field: 'current_year'
     },
     
-    // Visibilité du profil
+    graduationYear: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      field: 'graduation_year',
+      validate: {
+        min: 2024,
+        max: 2030
+      }
+    },
+    
     isProfileVisible: {
       type: DataTypes.BOOLEAN,
-      defaultValue: false, // Invisible par défaut jusqu'à validation admin
+      defaultValue: true,
       field: 'is_profile_visible'
     },
     
-    // Métadonnées pour analytics
     profileViews: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
       field: 'profile_views'
-    },
-    
-    lastProfileUpdate: {
-      type: DataTypes.DATE,
-      field: 'last_profile_update'
     }
   }, {
     tableName: 'player_profiles',
@@ -75,10 +110,13 @@ module.exports = (sequelize, DataTypes) => {
         fields: ['college_id']
       },
       {
+        fields: ['position']
+      },
+      {
         fields: ['gender']
       },
       {
-        fields: ['profile_completion_status']
+        fields: ['graduation_year']
       },
       {
         fields: ['is_profile_visible']
@@ -92,9 +130,17 @@ module.exports = (sequelize, DataTypes) => {
     await this.save({ fields: ['profileViews'] });
   };
 
-  PlayerProfile.prototype.updateLastProfileUpdate = async function() {
-    this.lastProfileUpdate = new Date();
-    await this.save({ fields: ['lastProfileUpdate'] });
+  PlayerProfile.prototype.getAge = function() {
+    const today = new Date();
+    const birthDate = new Date(this.dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
   };
 
   PlayerProfile.prototype.toPublicJSON = function() {
@@ -115,7 +161,7 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
-  // Associations
+  // ✅ ASSOCIATIONS COMPLÈTES
   PlayerProfile.associate = function(models) {
     // Un profil joueur appartient à un utilisateur (relation 1:1)
     PlayerProfile.belongsTo(models.User, {
@@ -127,6 +173,12 @@ module.exports = (sequelize, DataTypes) => {
     PlayerProfile.belongsTo(models.NJCAACollege, {
       foreignKey: 'collegeId',
       as: 'college'
+    });
+    
+    // ✅ NOUVEAU : Un joueur peut avoir plusieurs évaluations NJCAA
+    PlayerProfile.hasMany(models.PlayerEvaluation, {
+      foreignKey: 'playerProfileId',
+      as: 'njcaaEvaluations'
     });
     
     // Un joueur peut être favori de plusieurs coachs (relation M:M)
