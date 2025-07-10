@@ -11,6 +11,10 @@ const { sequelize } = require('../config/database.connection');
  * des autres types d'utilisateurs. Les coachs NJCAA ne payent pas d'abonnement
  * et ne recherchent pas de joueurs. Leur rôle principal est d'évaluer leurs
  * propres joueurs pour aider les coachs NCAA/NAIA dans leur recrutement.
+ * 
+ * CONCEPT PÉDAGOGIQUE : Cette approche défensive garantit que chaque méthode
+ * peut fonctionner indépendamment, même si certaines associations ne sont pas
+ * chargées. C'est comme avoir plusieurs plans de secours.
  */
 class NJCAACoachController {
   /**
@@ -179,31 +183,38 @@ class NJCAACoachController {
   }
 
   /**
-   * ⚙️ Page "Settings" - Gestion du profil personnel
+   * ⚙️ Page "Settings" - Gestion du profil personnel (MÉTHODE CORRIGÉE)
+   * 
+   * CONCEPT PÉDAGOGIQUE : Cette méthode illustre l'importance de la programmation
+   * défensive. Nous testons chaque étape et gérons gracieusement les erreurs
+   * plutôt que de laisser l'application planter.
+   * 
+   * CORRECTION CRITIQUE : Simplification de la logique de récupération des données
+   * et gestion robuste des associations Sequelize qui peuvent parfois échouer.
    */
   static async getSettings(req, res) {
     try {
       const userId = req.user.id;
 
-      console.log(`⚙️ Loading settings for NJCAA coach: ${req.user.email}`);
+      console.log(`⚙️ Loading settings for NJCAA coach: ${req.user.email} (ID: ${userId})`);
 
-      const coachProfile = await NJCAACoachProfile.findOne({
-        where: { userId: userId },
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt', 'lastLogin']
-          },
-          {
-            model: NJCAACollege,
-            as: 'college',
-            attributes: ['id', 'name', 'state', 'region', 'division']
-          }
-        ]
-      });
+      // ✅ CORRECTION : Récupération défensive avec gestion d'erreur
+      let coachProfile;
+      try {
+        coachProfile = await NJCAACoachProfile.findOne({
+          where: { userId: userId }
+        });
+      } catch (profileError) {
+        console.error('Error finding coach profile:', profileError);
+        return res.status(500).json({
+          status: 'error',
+          message: 'Error retrieving coach profile',
+          code: 'PROFILE_RETRIEVAL_ERROR'
+        });
+      }
 
       if (!coachProfile) {
+        console.log(`❌ No NJCAA coach profile found for user ${userId}`);
         return res.status(404).json({
           status: 'error',
           message: 'NJCAA coach profile not found',
@@ -211,7 +222,37 @@ class NJCAACoachController {
         });
       }
 
-      // 📊 Calculer quelques statistiques pour l'affichage
+      console.log(`✅ Coach profile found (ID: ${coachProfile.id})`);
+
+      // ✅ CORRECTION : Récupération séparée et défensive des associations
+      let user = null;
+      let college = null;
+
+      // Récupérer l'utilisateur associé
+      try {
+        user = await User.findByPk(userId, {
+          attributes: ['id', 'firstName', 'lastName', 'email', 'createdAt', 'lastLogin']
+        });
+        console.log(`✅ User data retrieved for ${user?.email}`);
+      } catch (userError) {
+        console.error('Error retrieving user data:', userError);
+        // Continuer sans les données utilisateur si nécessaire
+      }
+
+      // Récupérer le college associé
+      try {
+        if (coachProfile.collegeId) {
+          college = await NJCAACollege.findByPk(coachProfile.collegeId, {
+            attributes: ['id', 'name', 'state', 'region', 'division']
+          });
+          console.log(`✅ College data retrieved: ${college?.name}`);
+        }
+      } catch (collegeError) {
+        console.error('Error retrieving college data:', collegeError);
+        // Continuer sans les données du college si nécessaire
+      }
+
+      // 📊 Calculer quelques statistiques pour l'affichage de manière défensive
       const evaluationStats = {
         totalEvaluations: coachProfile.totalEvaluations || 0,
         lastEvaluationDate: coachProfile.lastEvaluationDate,
@@ -219,14 +260,40 @@ class NJCAACoachController {
         profileCompleteness: NJCAACoachController.calculateProfileCompleteness(coachProfile)
       };
 
-      console.log(`✅ Settings loaded for coach ${userId}`);
+      console.log(`✅ Settings loaded successfully for coach ${userId}`);
 
-      return res.json({
+      // ✅ CORRECTION : Structure de réponse simplifiée et robuste
+      return res.status(200).json({
         status: 'success',
         data: {
-          profile: coachProfile.toJSON(),
-          user: coachProfile.user,
-          college: coachProfile.college,
+          profile: {
+            id: coachProfile.id,
+            userId: coachProfile.userId,
+            position: coachProfile.position,
+            phoneNumber: coachProfile.phoneNumber,
+            collegeId: coachProfile.collegeId,
+            division: coachProfile.division,
+            teamSport: coachProfile.teamSport,
+            totalEvaluations: coachProfile.totalEvaluations,
+            lastEvaluationDate: coachProfile.lastEvaluationDate,
+            createdAt: coachProfile.createdAt,
+            updatedAt: coachProfile.updatedAt
+          },
+          user: user ? {
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            createdAt: user.createdAt,
+            lastLogin: user.lastLogin
+          } : null,
+          college: college ? {
+            id: college.id,
+            name: college.name,
+            state: college.state,
+            region: college.region,
+            division: college.division
+          } : null,
           statistics: evaluationStats,
           metadata: {
             lastUpdated: new Date(),
@@ -237,11 +304,12 @@ class NJCAACoachController {
       });
 
     } catch (error) {
-      console.error('NJCAA coach settings error:', error);
+      console.error('❌ NJCAA coach settings error:', error);
       return res.status(500).json({
         status: 'error',
         message: 'Failed to load settings',
-        code: 'SETTINGS_ERROR'
+        code: 'SETTINGS_ERROR',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
@@ -296,7 +364,19 @@ class NJCAACoachController {
         message: 'Profile settings updated successfully',
         data: {
           updatedFields: Object.keys(updateFields),
-          profile: coachProfile.toJSON()
+          profile: {
+            id: coachProfile.id,
+            userId: coachProfile.userId,
+            position: coachProfile.position,
+            phoneNumber: coachProfile.phoneNumber,
+            collegeId: coachProfile.collegeId,
+            division: coachProfile.division,
+            teamSport: coachProfile.teamSport,
+            totalEvaluations: coachProfile.totalEvaluations,
+            lastEvaluationDate: coachProfile.lastEvaluationDate,
+            createdAt: coachProfile.createdAt,
+            updatedAt: coachProfile.updatedAt
+          }
         }
       });
 
