@@ -312,12 +312,17 @@ class AuthController {
   }
 
   /**
-   * 🔐 Connexion universelle pour tous les types d'utilisateurs
+   * 🔐 Connexion universelle - MÉTHODE PRINCIPALE CORRIGÉE
+   * 
+   * Cette méthode gère la connexion pour tous les types d'utilisateurs avec
+   * une approche défensive contre les erreurs et une gestion robuste des profils.
    */
   static async login(req, res) {
     try {
+      console.log('🔍 Login attempt started');
       const { email, password } = req.body;
 
+      // Validation des entrées de base
       if (!email || !password) {
         return res.status(400).json({
           status: 'error',
@@ -326,17 +331,16 @@ class AuthController {
         });
       }
 
-      // Rechercher l'utilisateur avec son profil
+      console.log(`🔍 Looking for user with email: ${email}`);
+
+      // ✅ CORRECTION : Recherche simplifiée sans inclusion des profils
+      // pour éviter les erreurs d'association lors de la connexion
       const user = await User.findOne({
-        where: { email: email.toLowerCase() },
-        include: [
-          { model: PlayerProfile, as: 'playerProfile', required: false },
-          { model: CoachProfile, as: 'coachProfile', required: false },
-          { model: NJCAACoachProfile, as: 'njcaaCoachProfile', required: false }
-        ]
+        where: { email: email.toLowerCase().trim() }
       });
 
       if (!user) {
+        console.log('❌ User not found');
         return res.status(401).json({
           status: 'error',
           message: 'Invalid credentials',
@@ -344,18 +348,24 @@ class AuthController {
         });
       }
 
-      // Vérifier le mot de passe
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      console.log(`✅ User found: ${user.id} (${user.userType})`);
+
+      // Vérifier le mot de passe avec la méthode intégrée
+      const isPasswordValid = await user.validatePassword(password);
       if (!isPasswordValid) {
+        console.log('❌ Invalid password');
         return res.status(401).json({
           status: 'error',
           message: 'Invalid credentials',
           code: 'INVALID_CREDENTIALS'
         });
       }
+
+      console.log('✅ Password validated');
 
       // Vérifier que le compte est actif
       if (!user.isActive) {
+        console.log('❌ Account inactive');
         return res.status(403).json({
           status: 'error',
           message: 'Account is not activated. Please contact support.',
@@ -363,30 +373,60 @@ class AuthController {
         });
       }
 
+      console.log('✅ Account is active');
+
+      // ✅ CORRECTION : Récupération défensive du profil
+      let profile = null;
+      try {
+        profile = await user.getProfile();
+        console.log(`✅ Profile retrieved: ${profile ? 'Found' : 'Not found'}`);
+      } catch (profileError) {
+        console.error('⚠️ Profile retrieval error (non-critical):', profileError.message);
+        // Ne pas faire échouer la connexion si le profil n'est pas trouvé
+      }
+
       // Mettre à jour la dernière connexion
-      await user.updateLastLogin();
+      try {
+        await user.updateLastLogin();
+        console.log('✅ Last login updated');
+      } catch (updateError) {
+        console.error('⚠️ Last login update error (non-critical):', updateError.message);
+      }
 
-      // Générer les tokens
-      const tokens = AuthService.generateTokenPair(user);
+      // ✅ CORRECTION : Génération sécurisée des tokens
+      let tokens;
+      try {
+        tokens = AuthService.generateTokenPair(user);
+        console.log('✅ Tokens generated successfully');
+      } catch (tokenError) {
+        console.error('❌ Token generation error:', tokenError);
+        return res.status(500).json({
+          status: 'error',
+          message: 'Authentication system error',
+          code: 'TOKEN_GENERATION_ERROR'
+        });
+      }
 
-      console.log(`✅ Successful login for ${user.userType}: ${email}`);
+      console.log(`🎉 Successful login for ${user.userType}: ${email}`);
 
-      return res.json({
+      // Réponse de succès avec structure simplifiée et robuste
+      return res.status(200).json({
         status: 'success',
         message: 'Login successful',
         data: {
           user: user.toPublicJSON(),
-          profile: await user.getProfile(),
+          profile: profile ? profile.toJSON() : null,
           tokens: tokens
         }
       });
 
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       return res.status(500).json({
         status: 'error',
-        message: 'Login failed',
-        code: 'LOGIN_ERROR'
+        message: 'Login failed due to server error',
+        code: 'LOGIN_ERROR',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }

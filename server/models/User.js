@@ -1,9 +1,8 @@
-// portall/server/models/User.js
+// server/models/User.js
 
 'use strict';
 
 const bcrypt = require('bcryptjs');
-const { bcrypt: bcryptConfig } = require('../config/auth');
 
 module.exports = (sequelize, DataTypes) => {
   const User = sequelize.define('User', {
@@ -14,6 +13,10 @@ module.exports = (sequelize, DataTypes) => {
       validate: {
         isEmail: true,
         len: [1, 255]
+      },
+      set(value) {
+        // Normaliser l'email en minuscules
+        this.setDataValue('email', value.toLowerCase().trim());
       }
     },
     
@@ -43,14 +46,10 @@ module.exports = (sequelize, DataTypes) => {
       field: 'last_name'
     },
     
-    // MISE À JOUR: Enum étendu pour inclure njcaa_coach
     userType: {
       type: DataTypes.ENUM('player', 'coach', 'admin', 'njcaa_coach'),
       allowNull: false,
-      field: 'user_type',
-      validate: {
-        isIn: [['player', 'coach', 'admin', 'njcaa_coach']]
-      }
+      field: 'user_type'
     },
     
     isActive: {
@@ -68,21 +67,6 @@ module.exports = (sequelize, DataTypes) => {
     lastLogin: {
       type: DataTypes.DATE,
       field: 'last_login'
-    },
-    
-    emailVerificationToken: {
-      type: DataTypes.STRING,
-      field: 'email_verification_token'
-    },
-    
-    passwordResetToken: {
-      type: DataTypes.STRING,
-      field: 'password_reset_token'
-    },
-    
-    passwordResetExpires: {
-      type: DataTypes.DATE,
-      field: 'password_reset_expires'
     }
   }, {
     tableName: 'users',
@@ -90,34 +74,35 @@ module.exports = (sequelize, DataTypes) => {
     underscored: true,
     
     hooks: {
-      beforeCreate: async (user) => {
-        if (user.password) {
-          user.password = await bcrypt.hash(user.password, bcryptConfig.saltRounds);
+      beforeCreate: async (user, options) => {
+        // Hasher le mot de passe si fourni en texte clair
+        if (user.password && !user.password.startsWith('$2')) {
+          user.password = await bcrypt.hash(user.password, 12);
         }
-        console.log(`🔐 Creating new user: ${user.email} (type: ${user.userType})`);
       },
       
-      beforeUpdate: async (user) => {
-        if (user.changed('password')) {
-          user.password = await bcrypt.hash(user.password, bcryptConfig.saltRounds);
-          console.log(`🔐 Password updated for user: ${user.email}`);
+      beforeUpdate: async (user, options) => {
+        // Re-hasher le mot de passe seulement s'il a changé
+        if (user.changed('password') && user.password && !user.password.startsWith('$2')) {
+          user.password = await bcrypt.hash(user.password, 12);
         }
       }
     }
   });
 
-  // Méthodes d'instance existantes
-  User.prototype.validatePassword = async function(password) {
+  // Méthodes d'instance pour authentification
+  User.prototype.validatePassword = async function(plainPassword) {
     try {
-      return await bcrypt.compare(password, this.password);
+      return await bcrypt.compare(plainPassword, this.password);
     } catch (error) {
-      console.error('Error validating password:', error);
+      console.error('Password validation error:', error);
       return false;
     }
   };
 
   User.prototype.toPublicJSON = function() {
     const values = Object.assign({}, this.dataValues);
+    // Supprimer les champs sensibles
     delete values.password;
     delete values.emailVerificationToken;
     delete values.passwordResetToken;
@@ -134,23 +119,43 @@ module.exports = (sequelize, DataTypes) => {
     await this.save({ fields: ['lastLogin'] });
   };
 
-  // MISE À JOUR: Méthodes pour gérer les profils avec le nouveau type
+  // ✅ CORRECTION CRITIQUE : Méthode getProfile simplifiée et robuste
   User.prototype.getProfile = async function() {
-    if (this.userType === 'player') {
-      return await this.getPlayerProfile({
-        include: ['college']
-      });
-    } else if (this.userType === 'coach') {
-      return await this.getCoachProfile({
-        include: ['college']
-      });
-    } else if (this.userType === 'njcaa_coach') {
-      // NOUVEAU: Support pour les coachs NJCAA
-      return await this.getNjcaaCoachProfile({
-        include: ['college']
-      });
+    try {
+      // Utiliser les associations Sequelize déjà chargées si disponibles
+      if (this.userType === 'player' && this.playerProfile) {
+        return this.playerProfile;
+      } else if (this.userType === 'coach' && this.coachProfile) {
+        return this.coachProfile;
+      } else if (this.userType === 'njcaa_coach' && this.njcaaCoachProfile) {
+        return this.njcaaCoachProfile;
+      }
+      
+      // Si les associations ne sont pas chargées, les récupérer manuellement
+      const models = sequelize.models;
+      
+      if (this.userType === 'player') {
+        return await models.PlayerProfile.findOne({
+          where: { userId: this.id },
+          include: [{ model: models.NJCAACollege, as: 'college' }]
+        });
+      } else if (this.userType === 'coach') {
+        return await models.CoachProfile.findOne({
+          where: { userId: this.id },
+          include: [{ model: models.NCAACollege, as: 'college' }]
+        });
+      } else if (this.userType === 'njcaa_coach') {
+        return await models.NJCAACoachProfile.findOne({
+          where: { userId: this.id },
+          include: [{ model: models.NJCAACollege, as: 'college' }]
+        });
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error in getProfile:', error);
+      return null;
     }
-    return null;
   };
 
   User.prototype.toCompleteJSON = async function() {
@@ -163,7 +168,7 @@ module.exports = (sequelize, DataTypes) => {
     };
   };
 
-  // Méthodes statiques existantes
+  // Méthodes statiques
   User.findByEmail = async function(email) {
     return await this.findOne({
       where: { email: email.toLowerCase().trim() }
@@ -175,27 +180,27 @@ module.exports = (sequelize, DataTypes) => {
     return !!user;
   };
 
-  // MISE À JOUR: Associations étendues pour inclure les coachs NJCAA
+  // ✅ ASSOCIATIONS COMPLÈTES ET CORRECTES
   User.associate = function(models) {
     // Un utilisateur peut avoir un profil joueur
     User.hasOne(models.PlayerProfile, {
       foreignKey: 'userId',
       as: 'playerProfile',
-      constraints: false // Permet la relation optionnelle
+      onDelete: 'CASCADE'
     });
     
     // Un utilisateur peut avoir un profil coach NCAA/NAIA
     User.hasOne(models.CoachProfile, {
       foreignKey: 'userId',
       as: 'coachProfile',
-      constraints: false
+      onDelete: 'CASCADE'
     });
     
-    // NOUVEAU: Un utilisateur peut avoir un profil coach NJCAA
+    // ✅ CRUCIAL : Un utilisateur peut avoir un profil coach NJCAA
     User.hasOne(models.NJCAACoachProfile, {
       foreignKey: 'userId',
       as: 'njcaaCoachProfile',
-      constraints: false
+      onDelete: 'CASCADE'
     });
   };
 

@@ -70,22 +70,64 @@ class AuthService {
   }
 
   /**
+   * * 🎫 Générer une paire de tokens (access + refresh)
+   * 
+   * SÉCURITÉ : L'access token a une durée courte (1h) pour limiter l'exposition
+   * en cas de compromission, tandis que le refresh token dure plus longtemps (7j)
+   * pour éviter de redemander les credentials trop souvent.
+   * 
    * Génère une paire de tokens (access + refresh)
    * @param {Object} user - L'objet utilisateur
    * @returns {Object} Objet contenant accessToken et refreshToken
    */
   static generateTokenPair(user) {
-    const jwtConfig = this.getJWTConfig();
-    
-    const accessToken = this.generateToken(user, 'access');
-    const refreshToken = this.generateToken(user, 'refresh');
+    try {
+      // Vérifier que JWT_SECRET est configuré
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
 
-    return {
-      accessToken,
-      refreshToken,
-      expiresIn: jwtConfig.expiresIn,
-      tokenType: 'Bearer'
-    };
+      // Payload minimal pour éviter les tokens trop volumineux
+      const payload = {
+        userId: user.id,
+        email: user.email,
+        userType: user.userType,
+        isActive: user.isActive
+      };
+
+      // Générer l'access token (courte durée)
+      const accessToken = jwt.sign(
+        payload,
+        process.env.JWT_SECRET,
+        {
+          expiresIn: '1h',
+          issuer: 'portall-api',
+          audience: 'portall-client'
+        }
+      );
+
+      // Générer le refresh token (longue durée)
+      const refreshToken = jwt.sign(
+        { userId: user.id },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: '7d',
+          issuer: 'portall-api',
+          audience: 'portall-client'
+        }
+      );
+
+      return {
+        accessToken,
+        refreshToken,
+        expiresIn: 3600, // 1 heure en secondes
+        tokenType: 'Bearer'
+      };
+
+    } catch (error) {
+      console.error('Token generation error:', error);
+      throw new Error(`Token generation failed: ${error.message}`);
+    }
   }
 
   /**
@@ -95,26 +137,48 @@ class AuthService {
    * @throws {Error} Si le token est invalide
    */
   static verifyToken(token) {
-    const jwtConfig = this.getJWTConfig();
-    
     try {
-      // Vérifier et décoder le token avec la même configuration
-      const decoded = jwt.verify(token, jwtConfig.secret, {
-        issuer: jwtConfig.issuer,
-        audience: jwtConfig.audience
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
+
+      return jwt.verify(token, process.env.JWT_SECRET, {
+        issuer: 'portall-api',
+        audience: 'portall-client'
       });
 
-      return decoded;
     } catch (error) {
-      // Différents types d'erreurs JWT
-      if (error.name === 'JsonWebTokenError') {
+      if (error.name === 'TokenExpiredError') {
+        throw new Error('Token has expired');
+      } else if (error.name === 'JsonWebTokenError') {
         throw new Error('Invalid token');
-      } else if (error.name === 'TokenExpiredError') {
-        throw new Error('Token expired');
-      } else if (error.name === 'NotBeforeError') {
-        throw new Error('Token not active');
       } else {
-        throw new Error('Token verification failed');
+        throw new Error(`Token verification failed: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * 🔄 Vérifier un refresh token
+   */
+  static verifyRefreshToken(refreshToken) {
+    try {
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET is not configured');
+      }
+
+      return jwt.verify(refreshToken, process.env.JWT_SECRET, {
+        issuer: 'portall-api',
+        audience: 'portall-client'
+      });
+
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        throw new Error('Refresh token has expired');
+      } else if (error.name === 'JsonWebTokenError') {
+        throw new Error('Invalid refresh token');
+      } else {
+        throw new Error(`Refresh token verification failed: ${error.message}`);
       }
     }
   }
@@ -129,9 +193,8 @@ class AuthService {
       return null;
     }
 
-    // Format attendu: "Bearer TOKEN_STRING"
+    // Format attendu : "Bearer <token>"
     const parts = authHeader.split(' ');
-    
     if (parts.length !== 2 || parts[0] !== 'Bearer') {
       return null;
     }
@@ -165,6 +228,18 @@ class AuthService {
     const requiredLevel = roleHierarchy[requiredRole] || 0;
 
     return userLevel >= requiredLevel;
+  }
+
+  /**
+   * 🔧 Décoder un token sans vérification (pour debug uniquement)
+   */
+  static decodeTokenUnsafe(token) {
+    try {
+      return jwt.decode(token, { complete: true });
+    } catch (error) {
+      console.error('Token decode error:', error);
+      return null;
+    }
   }
 
   /**
