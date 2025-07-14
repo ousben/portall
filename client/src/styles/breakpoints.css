@@ -1,0 +1,74 @@
+/* portall/client/src/styles/breakpoints.css */
+
+/**
+ * 📱 Système de Breakpoints Portall - Approche Mobile-First
+ * 
+ * Cette configuration suit les principes de responsive design moderne :
+ * 1. Mobile-first : On commence par optimiser pour les petits écrans
+ * 2. Progressive enhancement : On ajoute des améliorations pour les écrans plus grands
+ * 3. Breakpoints basés sur le contenu plutôt que sur des appareils spécifiques
+ * 
+ * 🎯 Concept pédagogique : Design fluide vs. design adaptatif
+ * Notre approche combine les deux : des layouts fluides avec des points de rupture
+ * strategiques pour optimiser l'expérience sur chaque catégorie d'écran.
+ */
+
+:root {
+  /* Breakpoints principaux pour votre application Portall */
+  --breakpoint-mobile: 480px;    /* iPhone SE et plus petits */
+  --breakpoint-mobile-large: 640px; /* iPhone Pro et équivalents */
+  --breakpoint-tablet: 768px;    /* iPad portrait */
+  --breakpoint-tablet-large: 1024px; /* iPad landscape */
+  --breakpoint-desktop: 1280px;  /* MacBook Air 13" */
+  --breakpoint-desktop-large: 1440px; /* MacBook Pro 14" */
+  --breakpoint-desktop-xl: 1728px; /* MacBook Pro 16" */
+  
+  /* Variables de design fluide - s'adaptent automatiquement */
+  --container-padding: clamp(1rem, 5vw, 2rem);
+  --section-spacing: clamp(2rem, 8vw, 4rem);
+  --card-padding: clamp(1.5rem, 4vw, 2.5rem);
+  
+  /* Typography responsive - s'adapte à la taille d'écran */
+  --font-size-xs: clamp(0.75rem, 2vw, 0.875rem);
+  --font-size-sm: clamp(0.875rem, 2.5vw, 1rem);
+  --font-size-base: clamp(1rem, 3vw, 1.125rem);
+  --font-size-lg: clamp(1.125rem, 3.5vw, 1.25rem);
+  --font-size-xl: clamp(1.25rem, 4vw, 1.5rem);
+  --font-size-2xl: clamp(1.5rem, 5vw, 2rem);
+  --font-size-3xl: clamp(2rem, 6vw, 3rem);
+  
+  /* Espacements adaptatifs */
+  --space-xs: clamp(0.25rem, 1vw, 0.5rem);
+  --space-sm: clamp(0.5rem, 2vw, 1rem);
+  --space-md: clamp(1rem, 3vw, 1.5rem);
+  --space-lg: clamp(1.5rem, 4vw, 2rem);
+  --space-xl: clamp(2rem, 5vw, 3rem);
+}
+
+/* Mixins CSS pour les media queries (approche DRY) */
+.mobile-only {
+  @media (max-width: calc(var(--breakpoint-tablet) - 1px)) {
+    display: block;
+  }
+  @media (min-width: var(--breakpoint-tablet)) {
+    display: none;
+  }
+}
+
+.tablet-and-up {
+  @media (max-width: calc(var(--breakpoint-tablet) - 1px)) {
+    display: none;
+  }
+  @media (min-width: var(--breakpoint-tablet)) {
+    display: block;
+  }
+}
+
+.desktop-only {
+  @media (max-width: calc(var(--breakpoint-desktop) - 1px)) {
+    display: none;
+  }
+  @media (min-width: var(--breakpoint-desktop)) {
+    display: block;
+  }
+}

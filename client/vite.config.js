@@ -4,11 +4,24 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// Cette configuration nous permet d'utiliser des imports absolus
-// Au lieu de: import Component from '../../../components/Component'
-// On pourra faire: import Component from '@/components/Component'
+// Configuration Vite optimisée pour Portall
 export default defineConfig({
   plugins: [react()],
+  
+  // Configuration du serveur de développement
+  server: {
+    port: 3000,
+    // Proxy automatique vers votre API backend
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
+  },
+  
+  // Alias de chemins pour simplifier les imports
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -16,26 +29,30 @@ export default defineConfig({
       '@pages': path.resolve(__dirname, './src/pages'),
       '@services': path.resolve(__dirname, './src/services'),
       '@contexts': path.resolve(__dirname, './src/contexts'),
+      '@hooks': path.resolve(__dirname, './src/hooks'),
       '@utils': path.resolve(__dirname, './src/utils'),
-      '@assets': path.resolve(__dirname, './src/assets'),
+      '@styles': path.resolve(__dirname, './src/styles')
     }
   },
-  // Configuration du serveur de développement
-  server: {
-    port: 3000,
-    proxy: {
-      // Ceci redirigera toutes les requêtes /api vers notre backend
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
+  
+  // Variables d'environnement disponibles côté client
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+  },
+  
+  // Optimisation du build de production
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    // Optimisation pour les chunks
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          api: ['axios']
+        }
       }
-    },
-    // CORRECTION : Configuration pour éviter les erreurs de source map
-    build: {
-      sourcemap: false, // Désactive les source maps en production pour éviter les erreurs
-    },
-    css: {
-      devSourcemap: true, // Active les source maps CSS seulement en développement
     }
   }
 })

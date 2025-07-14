@@ -1,292 +1,304 @@
 // portall/client/src/contexts/AuthContext.jsx
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import AuthService from '../services/authService';
-import toast from 'react-hot-toast';
+import React, { createContext, useContext, useReducer, useEffect } from 'react'
+import AuthService from '@services/authService'
+import toast from 'react-hot-toast'
 
-// Actions possibles pour le reducer (inchangé)
-const AUTH_ACTIONS = {
-  LOGIN_START: 'LOGIN_START',
-  LOGIN_SUCCESS: 'LOGIN_SUCCESS',
-  LOGIN_FAILURE: 'LOGIN_FAILURE',
-  REGISTER_START: 'REGISTER_START',
-  REGISTER_SUCCESS: 'REGISTER_SUCCESS',
-  REGISTER_FAILURE: 'REGISTER_FAILURE',
-  LOGOUT: 'LOGOUT',
-  SET_USER: 'SET_USER',
-  SET_LOADING: 'SET_LOADING',
-  CLEAR_ERROR: 'CLEAR_ERROR'
-};
+/**
+ * 🔐 Context d'Authentification - Cœur de la gestion d'état utilisateur
+ * 
+ * Ce context gère l'état d'authentification global de l'application,
+ * s'intégrant parfaitement avec votre système d'authentification backend.
+ * 
+ * 🎯 Responsabilités principales :
+ * 1. Gestion de l'état de connexion (isAuthenticated, user, loading)
+ * 2. Actions d'authentification (login, logout, register)
+ * 3. Persistance automatique entre sessions
+ * 4. Récupération automatique du profil au démarrage
+ * 5. Gestion des erreurs avec feedback utilisateur
+ */
 
-// État initial (inchangé)
+// Création du context
+const AuthContext = createContext()
+
+// États possibles de l'authentification
 const initialState = {
-  user: null,
   isAuthenticated: false,
-  isLoading: false,
-  error: null,
-  isInitialized: false
-};
+  user: null,
+  isLoading: true, // true au démarrage pour vérifier l'auth existante
+  error: null
+}
 
-// Reducer (inchangé)
+/**
+ * 🔄 Reducer pour la gestion d'état - Pattern Redux simplifié
+ * 
+ * Ce reducer gère toutes les transitions d'état liées à l'authentification
+ * de manière prévisible et debuggable.
+ */
 const authReducer = (state, action) => {
   switch (action.type) {
-    case AUTH_ACTIONS.LOGIN_START:
-    case AUTH_ACTIONS.REGISTER_START:
+    case 'AUTH_START':
       return {
         ...state,
         isLoading: true,
         error: null
-      };
+      }
 
-    case AUTH_ACTIONS.LOGIN_SUCCESS:
+    case 'AUTH_SUCCESS':
       return {
         ...state,
-        user: action.payload.user,
-        isAuthenticated: true,
         isLoading: false,
-        error: null,
-        isInitialized: true
-      };
+        isAuthenticated: true,
+        user: action.payload.user,
+        error: null
+      }
 
-    case AUTH_ACTIONS.REGISTER_SUCCESS:
+    case 'AUTH_ERROR':
       return {
         ...state,
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        error: action.payload
+      }
+
+    case 'AUTH_LOGOUT':
+      return {
+        ...state,
+        isAuthenticated: false,
+        user: null,
         isLoading: false,
         error: null
-      };
+      }
 
-    case AUTH_ACTIONS.LOGIN_FAILURE:
-    case AUTH_ACTIONS.REGISTER_FAILURE:
-      return {
-        ...state,
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: action.payload.message,
-        isInitialized: true
-      };
-
-    case AUTH_ACTIONS.LOGOUT:
-      return {
-        ...state,
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-        isInitialized: true
-      };
-
-    case AUTH_ACTIONS.SET_USER:
-      return {
-        ...state,
-        user: action.payload.user,
-        isAuthenticated: !!action.payload.user,
-        isInitialized: true
-      };
-
-    case AUTH_ACTIONS.SET_LOADING:
+    case 'SET_LOADING':
       return {
         ...state,
         isLoading: action.payload
-      };
+      }
 
-    case AUTH_ACTIONS.CLEAR_ERROR:
+    case 'UPDATE_USER':
+      return {
+        ...state,
+        user: { ...state.user, ...action.payload }
+      }
+
+    case 'CLEAR_ERROR':
       return {
         ...state,
         error: null
-      };
+      }
 
     default:
-      return state;
+      return state
   }
-};
+}
 
-// Création du Context
-const AuthContext = createContext();
-
-// Provider du Context
+/**
+ * 🏠 Provider du Context - Composant racine de l'authentification
+ */
 export const AuthProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(authReducer, initialState);
+  const [state, dispatch] = useReducer(authReducer, initialState)
 
-  // CORRECTION MAJEURE : Stabiliser les fonctions avec useCallback
-  // Ces fonctions ne changeront que si leurs dépendances changent vraiment
-  
-  const clearError = useCallback(() => {
-    dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
-  }, []); // Pas de dépendances car dispatch est stable
-
-  const initializeAuth = useCallback(async () => {
-    dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
-    
-    try {
-      if (AuthService.isAuthenticated()) {
-        const result = await AuthService.getProfile();
-        
-        if (result.success) {
-          dispatch({
-            type: AUTH_ACTIONS.SET_USER,
-            payload: { user: result.user }
-          });
-        } else {
-          await AuthService.logout();
-          dispatch({ type: AUTH_ACTIONS.LOGOUT });
-        }
-      } else {
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: { user: null } });
-      }
-    } catch (error) {
-      console.error('Auth initialization error:', error);
-      await AuthService.logout();
-      dispatch({ type: AUTH_ACTIONS.LOGOUT });
-    } finally {
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-    }
-  }, []); // Pas de dépendances car nous utilisons dispatch et des services stables
-
-  const login = useCallback(async (email, password) => {
-    dispatch({ type: AUTH_ACTIONS.LOGIN_START });
-    
-    try {
-      const result = await AuthService.login(email, password);
-      
-      if (result.success) {
-        dispatch({
-          type: AUTH_ACTIONS.LOGIN_SUCCESS,
-          payload: { user: result.user }
-        });
-        
-        toast.success('Welcome back! Login successful.');
-        return { success: true };
-      } else {
-        dispatch({
-          type: AUTH_ACTIONS.LOGIN_FAILURE,
-          payload: { message: result.message }
-        });
-        
-        if (result.code === 'ACCOUNT_NOT_ACTIVE') {
-          toast.error('Your account is pending admin approval.');
-        } else {
-          toast.error(result.message || 'Login failed');
-        }
-        
-        return { success: false, message: result.message, code: result.code };
-      }
-    } catch (error) {
-      const errorMessage = 'An unexpected error occurred during login';
-      dispatch({
-        type: AUTH_ACTIONS.LOGIN_FAILURE,
-        payload: { message: errorMessage }
-      });
-      toast.error(errorMessage);
-      return { success: false, message: errorMessage };
-    }
-  }, []); // Pas de dépendances car nous utilisons dispatch et des services stables
-
-  const register = useCallback(async (userData) => {
-    dispatch({ type: AUTH_ACTIONS.REGISTER_START });
-    
-    try {
-      const result = await AuthService.register(userData);
-      
-      if (result.success) {
-        dispatch({ type: AUTH_ACTIONS.REGISTER_SUCCESS });
-        
-        toast.success('Account created successfully! Please wait for admin approval.');
-        return { success: true, message: result.message };
-      } else {
-        dispatch({
-          type: AUTH_ACTIONS.REGISTER_FAILURE,
-          payload: { message: result.message }
-        });
-        
-        if (result.errors && result.errors.length > 0) {
-          result.errors.forEach(error => {
-            toast.error(`${error.field}: ${error.message}`);
-          });
-        } else {
-          toast.error(result.message || 'Registration failed');
-        }
-        
-        return { success: false, message: result.message, errors: result.errors };
-      }
-    } catch (error) {
-      const errorMessage = 'An unexpected error occurred during registration';
-      dispatch({
-        type: AUTH_ACTIONS.REGISTER_FAILURE,
-        payload: { message: errorMessage }
-      });
-      toast.error(errorMessage);
-      return { success: false, message: errorMessage };
-    }
-  }, []); // Pas de dépendances
-
-  const logout = useCallback(async () => {
-    dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
-    
-    try {
-      await AuthService.logout();
-      dispatch({ type: AUTH_ACTIONS.LOGOUT });
-      toast.success('Logged out successfully');
-    } catch (error) {
-      console.error('Logout error:', error);
-      dispatch({ type: AUTH_ACTIONS.LOGOUT });
-    } finally {
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
-    }
-  }, []);
-
-  // CORRECTION MAJEURE : useEffect avec dépendance stable
-  // Maintenant initializeAuth ne change jamais, donc cet effect ne s'exécute qu'une fois
+  /**
+   * 🚀 Initialisation automatique - Vérification de l'authentification existante
+   * 
+   * Au démarrage de l'app, on vérifie s'il y a une session active
+   * en validant le token stocké via votre endpoint /api/auth/me
+   */
   useEffect(() => {
-    initializeAuth();
-  }, [initializeAuth]); // initializeAuth est maintenant stable grâce à useCallback
+    const initializeAuth = async () => {
+      console.log('🚀 Initializing authentication state...')
+      
+      if (AuthService.isAuthenticated()) {
+        try {
+          // Valider le token en récupérant le profil utilisateur
+          const result = await AuthService.getCurrentUser()
+          
+          if (result.success) {
+            dispatch({
+              type: 'AUTH_SUCCESS',
+              payload: { user: result.user }
+            })
+            console.log(`✅ User authenticated: ${result.user.email} (${result.user.userType})`)
+          } else {
+            // Token invalide, nettoyer
+            await AuthService.logout()
+            dispatch({ type: 'AUTH_ERROR', payload: 'Session expired' })
+          }
+        } catch (error) {
+          console.error('❌ Auth initialization failed:', error)
+          await AuthService.logout()
+          dispatch({ type: 'AUTH_ERROR', payload: 'Authentication failed' })
+        }
+      } else {
+        // Pas d'authentification trouvée
+        dispatch({ type: 'SET_LOADING', payload: false })
+        console.log('ℹ️ No existing authentication found')
+      }
+    }
 
-  // Valeurs exposées par le Context avec useCallback pour les fonctions
-  const value = useCallback(() => ({
+    initializeAuth()
+  }, [])
+
+  /**
+   * 🔑 Fonction de connexion
+   */
+  const login = async (email, password) => {
+    dispatch({ type: 'AUTH_START' })
+
+    try {
+      const result = await AuthService.login(email, password)
+
+      if (result.success) {
+        dispatch({
+          type: 'AUTH_SUCCESS',
+          payload: { user: result.user }
+        })
+
+        toast.success(`Welcome back, ${result.user.firstName}!`)
+        console.log(`✅ Login successful for: ${result.user.email}`)
+
+        return { success: true, user: result.user }
+      } else {
+        dispatch({
+          type: 'AUTH_ERROR',
+          payload: result.message
+        })
+
+        return { success: false, message: result.message }
+      }
+    } catch (error) {
+      const errorMessage = 'Login failed. Please try again.'
+      dispatch({
+        type: 'AUTH_ERROR',
+        payload: errorMessage
+      })
+
+      return { success: false, message: errorMessage }
+    }
+  }
+
+  /**
+   * 📝 Fonction d'inscription
+   */
+  const register = async (userData) => {
+    dispatch({ type: 'AUTH_START' })
+
+    try {
+      const result = await AuthService.register(userData)
+
+      if (result.success) {
+        // Si l'inscription inclut une connexion automatique
+        if (result.tokens) {
+          dispatch({
+            type: 'AUTH_SUCCESS',
+            payload: { user: result.user }
+          })
+          toast.success(`Account created successfully! Welcome ${result.user.firstName}!`)
+        } else {
+          // Inscription réussie mais nécessite validation admin
+          dispatch({ type: 'SET_LOADING', payload: false })
+          toast.success('Account created! Please wait for admin approval.')
+        }
+
+        return { success: true, user: result.user, message: result.message }
+      } else {
+        dispatch({
+          type: 'AUTH_ERROR',
+          payload: result.message
+        })
+
+        return { 
+          success: false, 
+          message: result.message,
+          errors: result.errors 
+        }
+      }
+    } catch (error) {
+      const errorMessage = 'Registration failed. Please try again.'
+      dispatch({
+        type: 'AUTH_ERROR',
+        payload: errorMessage
+      })
+
+      return { success: false, message: errorMessage }
+    }
+  }
+
+  /**
+   * 🚪 Fonction de déconnexion
+   */
+  const logout = async () => {
+    try {
+      await AuthService.logout()
+      dispatch({ type: 'AUTH_LOGOUT' })
+      toast.success('Logged out successfully')
+      console.log('✅ Logout completed')
+    } catch (error) {
+      console.error('❌ Logout error:', error)
+      // Même en cas d'erreur, on force le logout local
+      dispatch({ type: 'AUTH_LOGOUT' })
+    }
+  }
+
+  /**
+   * 🔄 Fonction de mise à jour du profil utilisateur
+   */
+  const updateUser = (userData) => {
+    dispatch({
+      type: 'UPDATE_USER',
+      payload: userData
+    })
+  }
+
+  /**
+   * 🧹 Fonction pour effacer les erreurs
+   */
+  const clearError = () => {
+    dispatch({ type: 'CLEAR_ERROR' })
+  }
+
+  /**
+   * 📊 Valeurs exposées par le context
+   */
+  const value = {
     // État
-    user: state.user,
-    isAuthenticated: state.isAuthenticated,
-    isLoading: state.isLoading,
-    error: state.error,
-    isInitialized: state.isInitialized,
+    ...state,
     
-    // Actions (maintenant stables)
+    // Actions
     login,
     register,
     logout,
+    updateUser,
     clearError,
     
     // Utilitaires
-    getCurrentUser: AuthService.getCurrentUser,
-    isAuth: AuthService.isAuthenticated
-  }), [
-    state.user,
-    state.isAuthenticated,
-    state.isLoading,
-    state.error,
-    state.isInitialized,
-    login,
-    register,
-    logout,
-    clearError
-  ]); // Les dépendances incluent tout ce qui peut changer
+    isLoading: state.isLoading,
+    hasError: !!state.error
+  }
 
   return (
-    <AuthContext.Provider value={value()}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
-  );
-};
+  )
+}
 
-// Hook personnalisé (inchangé)
+/**
+ * 🎣 Hook personnalisé pour utiliser le context d'authentification
+ * 
+ * Ce hook simplifie l'accès au context et ajoute une validation
+ * pour s'assurer qu'il est utilisé dans le bon Provider.
+ */
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  
-  return context;
-};
+  const context = useContext(AuthContext)
 
-export default AuthContext;
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+
+  return context
+}
+
+export default AuthContext

@@ -1,0 +1,461 @@
+/* portall/client/src/styles/components/auth.css */
+
+/**
+ * 🔐 Styles des Composants d'Authentification
+ * 
+ * Ces styles transforment vos composants d'authentification en interfaces
+ * élégantes et professionnelles. Chaque élément est conçu pour guider
+ * l'utilisateur naturellement vers l'action souhaitée.
+ * 
+ * 🎯 Philosophie de design :
+ * - Clarté : Chaque élément a un rôle visuel clair
+ * - Confiance : Les couleurs et espacements inspirent la sécurité
+ * - Accessibilité : Contrastes et tailles optimisés pour tous
+ */
+
+/* ===== LAYOUT PRINCIPAL D'AUTHENTIFICATION ===== */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  
+  /* Fond élégant avec gradient subtil */
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-50) 0%,
+    var(--color-gray-50) 50%,
+    var(--color-secondary-50) 100%
+  );
+  
+  /* Animation d'apparition fluide */
+  animation: fadeIn var(--duration-slow) var(--ease-out);
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 480px; /* Largeur optimale pour la lecture */
+  
+  /* Adaptation responsive naturelle */
+  @media (min-width: var(--breakpoint-tablet)) {
+    max-width: 520px;
+  }
+  
+  @media (min-width: var(--breakpoint-desktop)) {
+    max-width: 560px;
+  }
+}
+
+/* ===== CARTE D'AUTHENTIFICATION ===== */
+
+.auth-card {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  padding: var(--card-padding);
+  border: 1px solid var(--color-gray-200);
+  
+  /* Animation d'apparition avec effet de profondeur */
+  animation: slideUp var(--duration-normal) var(--ease-out);
+}
+
+/* Variante pour l'inscription (plus d'espace vertical) */
+.auth-card.register-card {
+  padding: var(--space-lg) var(--card-padding);
+  
+  @media (min-width: var(--breakpoint-tablet)) {
+    padding: var(--space-xl) var(--card-padding);
+  }
+}
+
+/* ===== EN-TÊTE D'AUTHENTIFICATION ===== */
+
+.auth-header {
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.auth-header h1 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+  margin-bottom: var(--space-sm);
+  
+  /* Gradient de texte pour le titre principal */
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-600),
+    var(--color-secondary-600)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  
+  @media (min-width: var(--breakpoint-tablet)) {
+    font-size: var(--font-size-3xl);
+  }
+}
+
+.auth-header p {
+  font-size: var(--font-size-base);
+  color: var(--color-gray-600);
+  line-height: var(--line-height-relaxed);
+  margin-bottom: 0;
+}
+
+/* ===== FORMULAIRES D'AUTHENTIFICATION ===== */
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.register-form {
+  gap: var(--space-xl); /* Plus d'espace pour le formulaire d'inscription */
+}
+
+/* Sections du formulaire (groupement logique) */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.form-section h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-800);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 2px solid var(--color-primary-100);
+}
+
+/* Rangées de formulaire pour layout horizontal */
+.form-row {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: 1fr;
+  
+  /* 2 colonnes sur tablette et plus */
+  @media (min-width: var(--breakpoint-tablet)) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ===== GROUPES DE CHAMPS ===== */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.form-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-gray-700);
+  margin-bottom: var(--space-xs);
+}
+
+/* Indicateur de champ requis */
+.form-label.required::after {
+  content: " *";
+  color: var(--color-error-500);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ===== CHAMPS DE SAISIE ===== */
+
+.form-input {
+  width: 100%;
+  padding: var(--space-md);
+  border: 2px solid var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  
+  /* Transition fluide pour les interactions */
+  transition: all var(--duration-fast) var(--ease-out);
+  
+  /* Suppression des styles par défaut du navigateur */
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* États d'interaction des champs */
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 
+    0 0 0 3px var(--color-primary-100),
+    var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.form-input:hover:not(:focus) {
+  border-color: var(--color-gray-400);
+}
+
+/* État d'erreur */
+.form-input.error {
+  border-color: var(--color-error-500);
+  background-color: var(--color-error-50);
+}
+
+.form-input.error:focus {
+  border-color: var(--color-error-500);
+  box-shadow: 
+    0 0 0 3px var(--color-error-100),
+    var(--shadow-sm);
+}
+
+/* État désactivé */
+.form-input:disabled {
+  background-color: var(--color-gray-100);
+  border-color: var(--color-gray-200);
+  color: var(--color-gray-500);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Placeholder styling */
+.form-input::placeholder {
+  color: var(--color-gray-400);
+  font-style: italic;
+}
+
+/* ===== SÉLECTEURS PERSONNALISÉS ===== */
+
+select.form-input {
+  /* Flèche personnalisée pour les sélecteurs */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right var(--space-md) center;
+  background-size: 1rem;
+  padding-right: calc(var(--space-md) * 2.5);
+}
+
+/* ===== MESSAGES D'ERREUR ===== */
+
+.error-message {
+  font-size: var(--font-size-sm);
+  color: var(--color-error-600);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-xs);
+  
+  /* Animation d'apparition */
+  animation: slideUp var(--duration-fast) var(--ease-out);
+}
+
+.error-banner {
+  padding: var(--space-md);
+  background-color: var(--color-error-50);
+  border: 1px solid var(--color-error-200);
+  border-radius: var(--radius-lg);
+  margin: var(--space-md) 0;
+}
+
+.error-banner p {
+  color: var(--color-error-700);
+  font-weight: var(--font-weight-medium);
+  margin: 0;
+}
+
+/* ===== MESSAGES DE SUCCÈS ===== */
+
+.success-message {
+  padding: var(--space-lg);
+  background-color: var(--color-success-50);
+  border: 1px solid var(--color-success-200);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  margin: var(--space-lg) 0;
+}
+
+.success-message p {
+  color: var(--color-success-700);
+  margin-bottom: var(--space-sm);
+}
+
+.success-message p:last-child {
+  margin-bottom: 0;
+}
+
+/* ===== BOUTONS D'AUTHENTIFICATION ===== */
+
+.auth-button {
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-600),
+    var(--color-primary-700)
+  );
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-family: inherit;
+  cursor: pointer;
+  
+  /* Transition pour tous les états */
+  transition: all var(--duration-normal) var(--ease-out);
+  
+  /* Suppression des styles par défaut */
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* États d'interaction du bouton */
+.auth-button:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-700),
+    var(--color-primary-800)
+  );
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.auth-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-button:focus {
+  outline: none;
+  box-shadow: 
+    0 0 0 3px var(--color-primary-200),
+    var(--shadow-lg);
+}
+
+/* État de chargement */
+.auth-button.loading {
+  background: var(--color-gray-400);
+  cursor: not-allowed;
+  position: relative;
+  color: transparent;
+}
+
+.auth-button.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid transparent;
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* État désactivé */
+.auth-button:disabled {
+  background: var(--color-gray-300);
+  color: var(--color-gray-500);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ===== LIENS D'AUTHENTIFICATION ===== */
+
+.auth-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  text-align: center;
+  margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.auth-redirect {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-600);
+}
+
+.link {
+  color: var(--color-gray-600);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  color: var(--color-primary-600);
+  text-decoration: underline;
+}
+
+.link-primary {
+  color: var(--color-primary-600);
+  font-weight: var(--font-weight-semibold);
+}
+
+.link-primary:hover {
+  color: var(--color-primary-700);
+}
+
+/* ===== RESPONSIVE ENHANCEMENTS ===== */
+
+/* Optimisations pour iPhone */
+@media (max-width: var(--breakpoint-mobile)) {
+  .auth-page {
+    padding: var(--space-sm);
+  }
+  
+  .auth-card {
+    padding: var(--space-lg);
+    border-radius: var(--radius-xl);
+  }
+  
+  .form-input {
+    padding: var(--space-sm) var(--space-md);
+    font-size: 16px; /* Évite le zoom sur iOS */
+  }
+  
+  .auth-button {
+    padding: var(--space-lg);
+    font-size: var(--font-size-lg);
+  }
+}
+
+/* Optimisations pour iPad */
+@media (min-width: var(--breakpoint-tablet)) and (max-width: var(--breakpoint-desktop)) {
+  .auth-container {
+    max-width: 600px;
+  }
+  
+  .auth-card {
+    padding: var(--space-xl);
+  }
+}
+
+/* Optimisations pour MacBook Pro et écrans larges */
+@media (min-width: var(--breakpoint-desktop-large)) {
+  .auth-page {
+    padding: var(--space-lg);
+  }
+  
+  .auth-container {
+    max-width: 640px;
+  }
+  
+  .auth-card {
+    padding: var(--space-xl) 3rem;
+  }
+}

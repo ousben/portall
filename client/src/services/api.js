@@ -1,160 +1,185 @@
 // portall/client/src/services/api.js
 
-import axios from 'axios';
+import axios from 'axios'
+import toast from 'react-hot-toast'
+
+/**
+ * 🔗 Configuration API centrale - Cœur de la communication Frontend/Backend
+ * 
+ * Ce service est conçu pour s'intégrer parfaitement avec votre architecture
+ * backend Portall. Chaque méthode respecte exactement le format de réponse
+ * standardisé de votre API.
+ * 
+ * 🎯 Principes d'architecture :
+ * 1. Intercepteurs automatiques pour les tokens JWT
+ * 2. Gestion centralisée des erreurs avec feedback utilisateur
+ * 3. Refresh automatique des tokens expirés
+ * 4. Logging détaillé pour le développement
+ */
 
 // Configuration de base d'Axios
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-
-// Créer une instance Axios avec configuration personnalisée
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000, // 10 secondes de timeout
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 10000,
   headers: {
     'Content-Type': 'application/json',
-  }
-});
+  },
+})
 
-// Fonction pour obtenir le token depuis le localStorage
-const getToken = () => {
-  try {
-    return localStorage.getItem('accessToken');
-  } catch (error) {
-    console.error('Error reading token from localStorage:', error);
-    return null;
-  }
-};
+// État des tokens en mémoire pour éviter les fuites localStorage
+let authTokens = {
+  accessToken: null,
+  refreshToken: null
+}
 
-// Fonction pour obtenir le refresh token
-const getRefreshToken = () => {
-  try {
-    return localStorage.getItem('refreshToken');
-  } catch (error) {
-    console.error('Error reading refresh token from localStorage:', error);
-    return null;
-  }
-};
-
-// Fonction pour sauvegarder les tokens
-const setTokens = (accessToken, refreshToken) => {
-  try {
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
-  } catch (error) {
-    console.error('Error saving tokens to localStorage:', error);
-  }
-};
-
-// Fonction pour supprimer les tokens
-const removeTokens = () => {
-  try {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-  } catch (error) {
-    console.error('Error removing tokens from localStorage:', error);
-  }
-};
-
-// Variable pour éviter les boucles infinies lors du refresh
-let isRefreshing = false;
-let failedQueue = [];
-
-const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
+/**
+ * 🔐 Gestion intelligente des tokens
+ * 
+ * Ces fonctions gèrent le cycle de vie des tokens JWT en synchronisation
+ * parfaite avec votre système d'authentification backend.
+ */
+export const setTokens = (accessToken, refreshToken) => {
+  authTokens.accessToken = accessToken
+  authTokens.refreshToken = refreshToken
   
-  failedQueue = [];
-};
+  // Stocker dans localStorage pour persistance entre sessions
+  if (accessToken) {
+    localStorage.setItem('accessToken', accessToken)
+  }
+  if (refreshToken) {
+    localStorage.setItem('refreshToken', refreshToken)
+  }
+  
+  console.log('🔐 Tokens updated and stored')
+}
 
-// Intercepteur pour ajouter automatiquement le token aux requêtes
+export const getTokens = () => {
+  // Récupérer depuis la mémoire ou localStorage si nécessaire
+  if (!authTokens.accessToken) {
+    authTokens.accessToken = localStorage.getItem('accessToken')
+    authTokens.refreshToken = localStorage.getItem('refreshToken')
+  }
+  
+  return authTokens
+}
+
+export const removeTokens = () => {
+  authTokens.accessToken = null
+  authTokens.refreshToken = null
+  
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('user')
+  
+  console.log('🔓 Tokens cleared')
+}
+
+/**
+ * 🚀 Intercepteur de requête - Injection automatique du token
+ * 
+ * Cet intercepteur ajoute automatiquement le token JWT à chaque requête,
+ * reproduisant fidèlement ce que votre middleware backend attend.
+ */
 api.interceptors.request.use(
   (config) => {
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const { accessToken } = getTokens()
+    
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
     }
-    return config;
+    
+    // Logging pour le développement
+    if (import.meta.env.VITE_LOG_LEVEL === 'debug') {
+      console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`)
+    }
+    
+    return config
   },
   (error) => {
-    return Promise.reject(error);
+    console.error('❌ Request interceptor error:', error)
+    return Promise.reject(error)
   }
-);
+)
 
-// Intercepteur pour gérer les réponses et le refresh automatique des tokens
+/**
+ * 🔄 Intercepteur de réponse - Gestion du refresh automatique
+ * 
+ * Cette logique reproduit exactement le workflow de votre backend :
+ * 1. Si token expiré (401), essayer le refresh automatiquement
+ * 2. Si refresh réussit, retry la requête originale
+ * 3. Si refresh échoue, rediriger vers login
+ */
 api.interceptors.response.use(
   (response) => {
-    // Si la réponse est OK, on la retourne telle quelle
-    return response;
+    // Logging des réponses réussies
+    if (import.meta.env.VITE_LOG_LEVEL === 'debug') {
+      console.log('✅ API Response:', response.status, response.config.url)
+    }
+    
+    return response
   },
   async (error) => {
-    const originalRequest = error.config;
-
-    // Si l'erreur est 401 (Unauthorized) et qu'on n'a pas déjà essayé de refresh
+    const originalRequest = error.config
+    
+    // Gestion du token expiré (401)
     if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        // Si un refresh est déjà en cours, on met la requête en attente
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        }).catch(err => {
-          return Promise.reject(err);
-        });
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      const refreshToken = getRefreshToken();
+      originalRequest._retry = true
+      
+      const { refreshToken } = getTokens()
       
       if (refreshToken) {
         try {
-          // Essayer de rafraîchir le token
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refreshToken: refreshToken
-          });
+          console.log('🔄 Access token expired, attempting refresh...')
           
-          const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data.data.tokens;
+          const refreshResponse = await axios.post(
+            `${api.defaults.baseURL}/auth/refresh`,
+            { refreshToken }
+          )
           
-          // Sauvegarder les nouveaux tokens
-          setTokens(newAccessToken, newRefreshToken);
+          const { tokens } = refreshResponse.data.data
+          setTokens(tokens.accessToken, tokens.refreshToken)
           
-          // Mettre à jour le header de la requête originale
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          // Retry la requête originale avec le nouveau token
+          originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`
           
-          // Traiter la queue des requêtes en attente
-          processQueue(null, newAccessToken);
+          console.log('✅ Token refreshed successfully')
+          return api(originalRequest)
           
-          // Relancer la requête originale
-          return api(originalRequest);
         } catch (refreshError) {
-          // Le refresh a échoué, déconnecter l'utilisateur
-          processQueue(refreshError, null);
-          removeTokens();
+          console.error('❌ Token refresh failed:', refreshError)
           
-          // Rediriger vers la page de login
-          window.location.href = '/login';
+          // Refresh échoué, nettoyer et rediriger
+          removeTokens()
+          toast.error('Session expired. Please login again.')
           
-          return Promise.reject(refreshError);
-        } finally {
-          isRefreshing = false;
+          // Redirection vers login (sera gérée par le router)
+          window.location.href = '/login'
+          
+          return Promise.reject(refreshError)
         }
       } else {
-        // Pas de refresh token, déconnecter l'utilisateur
-        removeTokens();
-        window.location.href = '/login';
+        // Pas de refresh token, redirection directe
+        removeTokens()
+        window.location.href = '/login'
       }
     }
-
-    return Promise.reject(error);
+    
+    // Gestion des autres erreurs avec messages utilisateur amicaux
+    const errorMessage = error.response?.data?.message || 'An unexpected error occurred'
+    
+    // Afficher les erreurs via toast (sauf pour certaines requêtes silencieuses)
+    if (!originalRequest.silent) {
+      toast.error(errorMessage)
+    }
+    
+    console.error('❌ API Error:', {
+      status: error.response?.status,
+      message: errorMessage,
+      url: error.config?.url
+    })
+    
+    return Promise.reject(error)
   }
-);
+)
 
-export { api, setTokens, removeTokens, getToken, getRefreshToken };
-export default api;
+export default api

@@ -1,0 +1,83 @@
+/* portall/client/src/styles/main.css */
+
+/**
+ * 📦 Fichier Principal des Styles Portall
+ * 
+ * Ce fichier orchestre l'ensemble du système de design en important
+ * tous les composants dans l'ordre optimal. L'ordre d'importation
+ * est crucial pour éviter les conflits de spécificité CSS.
+ * 
+ * 🎯 Ordre d'importation (du plus général au plus spécifique) :
+ * 1. Variables et tokens (fondations)
+ * 2. Reset et styles de base (normalisation)
+ * 3. Breakpoints et utilitaires (outils)
+ * 4. Composants (spécifique)
+ */
+
+/* ===== FONDATIONS ===== */
+@import './breakpoints.css';
+@import './tokens.css';
+@import './base.css';
+
+/* ===== COMPOSANTS ===== */
+@import './components/auth.css';
+@import './components/loading.css';
+@import './components/error-pages.css';
+@import './components/landing.css';
+
+/* ===== UTILITAIRES FINAUX ===== */
+
+/* Classes utilitaires pour les styles communs */
+.link-style {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary-600);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.link-style:hover {
+  color: var(--color-primary-700);
+  text-decoration: underline;
+}
+
+/* Animation globale pour l'app */
+.app {
+  animation: app-fade-in var(--duration-slow) var(--ease-out);
+}
+
+@keyframes app-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Amélioration de l'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --color-primary-500: #0066cc;
+    --color-text-primary: #000000;
+    --color-text-secondary: #333333;
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #ffffff;
+  }
+}

@@ -1,0 +1,295 @@
+/* portall/client/src/styles/base.css */
+
+/**
+ * 🧱 Styles de Base Portall - Foundation CSS
+ * 
+ * Cette feuille de style établit les fondations visuelles de votre application.
+ * Chaque règle a été pensée pour créer une expérience utilisateur cohérente
+ * et accessible sur tous les appareils.
+ * 
+ * 🎯 Principe de conception : Progressive Enhancement
+ * Nous commençons par une base solide qui fonctionne partout, puis nous
+ * ajoutons des améliorations pour les navigateurs plus modernes.
+ */
+
+/* ===== RESET ET NORMALISATION ===== */
+
+/* Reset moderne pour une base cohérente sur tous les navigateurs */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Base de 16px pour les rem, optimisée pour la lisibilité */
+  font-size: 16px;
+  /* Améliore le rendu des polices sur tous les appareils */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Optimise les performances de scroll sur mobile */
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  
+  /* Prévient le zoom horizontal sur mobile */
+  overflow-x: hidden;
+  
+  /* Améliore la lisibilité du texte */
+  text-rendering: optimizeLegibility;
+}
+
+/* ===== TYPOGRAPHIE RESPONSIVE ===== */
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-md);
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-extrabold);
+  
+  /* Amélioration pour les grands écrans */
+  @media (min-width: var(--breakpoint-desktop)) {
+    font-size: clamp(2.5rem, 4vw, 4rem);
+  }
+}
+
+h2 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+}
+
+h3 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+h4 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+p {
+  margin-bottom: var(--space-md);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-relaxed);
+}
+
+/* Liens avec style cohérent */
+a {
+  color: var(--color-primary-600);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+a:hover {
+  color: var(--color-primary-700);
+  text-decoration: underline;
+}
+
+a:focus {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ===== LAYOUT CONTAINERS ===== */
+
+/* Container principal adaptable */
+.container {
+  width: 100%;
+  max-width: 1280px; /* MacBook Pro 14" optimal */
+  margin: 0 auto;
+  padding: 0 var(--container-padding);
+}
+
+/* Variantes de containers pour différents besoins */
+.container-sm {
+  max-width: 640px;
+}
+
+.container-md {
+  max-width: 768px;
+}
+
+.container-lg {
+  max-width: 1024px;
+}
+
+.container-xl {
+  max-width: 1280px;
+}
+
+/* ===== SYSTEM DE GRID RESPONSIVE ===== */
+
+.grid {
+  display: grid;
+  gap: var(--space-md);
+}
+
+/* Grid adaptatif - 1 colonne sur mobile, 2 sur tablette, 3+ sur desktop */
+.grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* Responsive breakpoints pour le grid */
+@media (min-width: var(--breakpoint-tablet)) {
+  .grid-cols-md-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-cols-md-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: var(--breakpoint-desktop)) {
+  .grid-cols-lg-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-cols-lg-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ===== FLEXBOX UTILITIES ===== */
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.items-end {
+  align-items: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-start {
+  justify-content: flex-start;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+/* ===== SPACING UTILITIES ===== */
+
+.space-y-sm > * + * { margin-top: var(--space-sm); }
+.space-y-md > * + * { margin-top: var(--space-md); }
+.space-y-lg > * + * { margin-top: var(--space-lg); }
+
+.space-x-sm > * + * { margin-left: var(--space-sm); }
+.space-x-md > * + * { margin-left: var(--space-md); }
+.space-x-lg > * + * { margin-left: var(--space-lg); }
+
+/* ===== VISIBILITY UTILITIES ===== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ===== SCROLL BEHAVIOR ===== */
+
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Amélioration du scroll sur mobile */
+.scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== FOCUS STATES POUR L'ACCESSIBILITÉ ===== */
+
+.focus-ring:focus {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+/* ===== ANIMATIONS DE BASE ===== */
+
+.fade-in {
+  animation: fadeIn var(--duration-normal) var(--ease-out);
+}
+
+.slide-up {
+  animation: slideUp var(--duration-normal) var(--ease-out);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ===== PRINT STYLES ===== */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    font-size: 12pt;
+    line-height: 1.4;
+    color: black;
+    background: white;
+  }
+  
+  a[href^="http"]:after {
+    content: " (" attr(href) ")";
+    font-size: 90%;
+  }
+}

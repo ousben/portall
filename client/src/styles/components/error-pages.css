@@ -1,0 +1,300 @@
+/* portall/client/src/styles/components/error-pages.css */
+
+/**
+ * 🚫 Styles des Pages d'Erreur - Communication Élégante des Problèmes
+ * 
+ * Ces styles transforment les moments frustrants en opportunités de
+ * guidance utilisateur. Chaque page d'erreur devient un pont vers
+ * la résolution plutôt qu'un cul-de-sac.
+ * 
+ * 🎯 Psychologie de l'erreur utilisateur :
+ * - Réassurance : Montrer que ce n'est pas de leur faute
+ * - Orientation : Guider vers la solution
+ * - Cohérence : Maintenir l'identité visuelle même dans l'erreur
+ */
+
+/* ===== LAYOUT PRINCIPAL DES PAGES D'ERREUR ===== */
+
+.error-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: linear-gradient(
+    135deg,
+    var(--color-gray-50) 0%,
+    var(--color-primary-50) 50%,
+    var(--color-gray-50) 100%
+  );
+}
+
+.error-container {
+  max-width: 600px;
+  width: 100%;
+  text-align: center;
+  
+  /* Animation d'apparition avec rebond subtil */
+  animation: error-slide-up var(--duration-slow) var(--ease-bounce);
+}
+
+@keyframes error-slide-up {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ===== ILLUSTRATION D'ERREUR ===== */
+
+.error-illustration {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto var(--space-xl);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  
+  /* Animation de pulsation douce */
+  animation: gentle-pulse 2s ease-in-out infinite;
+}
+
+/* Couleurs selon le type d'erreur */
+.error-illustration.not-found {
+  background: linear-gradient(135deg, var(--color-primary-100), var(--color-primary-200));
+  color: var(--color-primary-600);
+}
+
+.error-illustration.unauthorized {
+  background: linear-gradient(135deg, var(--color-warning-100), var(--color-warning-200));
+  color: var(--color-warning-600);
+}
+
+.error-illustration.server-error {
+  background: linear-gradient(135deg, var(--color-error-100), var(--color-error-200));
+  color: var(--color-error-600);
+}
+
+@keyframes gentle-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* ===== CONTENU D'ERREUR ===== */
+
+.error-content h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--color-gray-900);
+  margin-bottom: var(--space-md);
+  
+  @media (min-width: var(--breakpoint-tablet)) {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+  }
+}
+
+.error-content .error-code {
+  font-size: var(--font-size-6xl);
+  font-weight: var(--font-weight-extrabold);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-600),
+    var(--color-secondary-600)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--space-sm);
+  line-height: 1;
+}
+
+.error-content p {
+  font-size: var(--font-size-lg);
+  color: var(--color-gray-600);
+  line-height: var(--line-height-relaxed);
+  margin-bottom: var(--space-xl);
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ===== SUGGESTIONS D'ACTION ===== */
+
+.error-suggestions {
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  margin: var(--space-xl) 0;
+  border: 1px solid var(--color-gray-200);
+  text-align: left;
+}
+
+.error-suggestions h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-gray-800);
+  margin-bottom: var(--space-md);
+  text-align: center;
+}
+
+.suggestion-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-lg);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.suggestion-item:hover {
+  background-color: var(--color-gray-50);
+}
+
+.suggestion-item::before {
+  content: "→";
+  color: var(--color-primary-500);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
+}
+
+.suggestion-item a {
+  color: var(--color-primary-600);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.suggestion-item a:hover {
+  color: var(--color-primary-700);
+  text-decoration: underline;
+}
+
+/* ===== BOUTONS D'ACTION ===== */
+
+.error-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-top: var(--space-xl);
+  
+  @media (min-width: var(--breakpoint-mobile)) {
+    flex-direction: row;
+    justify-content: center;
+  }
+}
+
+.error-button {
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition: all var(--duration-normal) var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.error-button.primary {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
+  color: white;
+  border: none;
+}
+
+.error-button.primary:hover {
+  background: linear-gradient(135deg, var(--color-primary-700), var(--color-primary-800));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.error-button.secondary {
+  background: var(--color-bg-secondary);
+  color: var(--color-gray-700);
+  border: 2px solid var(--color-gray-300);
+}
+
+.error-button.secondary:hover {
+  background: var(--color-gray-50);
+  border-color: var(--color-gray-400);
+  transform: translateY(-1px);
+}
+
+/* ===== RESPONSIVE ADAPTATIONS ===== */
+
+@media (max-width: var(--breakpoint-mobile)) {
+  .error-page {
+    padding: var(--space-md);
+  }
+  
+  .error-illustration {
+    width: 80px;
+    height: 80px;
+    font-size: 2rem;
+    margin-bottom: var(--space-lg);
+  }
+  
+  .error-content .error-code {
+    font-size: var(--font-size-4xl);
+  }
+  
+  .error-suggestions {
+    padding: var(--space-lg);
+  }
+  
+  .error-actions {
+    gap: var(--space-sm);
+  }
+}
+
+/* ===== ANIMATIONS SPÉCIFIQUES ===== */
+
+/* Animation pour la page 404 */
+.not-found-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Animation pour la page unauthorized */
+.unauthorized-animation {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
