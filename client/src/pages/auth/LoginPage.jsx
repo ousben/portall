@@ -1,53 +1,45 @@
 // client/src/pages/auth/LoginPage.jsx
-import React, { useState, useEffect } from 'react'
+
+import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 /**
- * 🔑 Page de Connexion - Interface utilisateur pour l'authentification
+ * 🔑 Page de Connexion - Version Corrigée Sans Boucles Infinies
  * 
- * Cette page reproduit exactement le workflow de votre endpoint POST /api/auth/login.
- * Elle gère la validation côté client, les erreurs d'API, et la redirection
- * post-connexion vers le dashboard approprié.
- * 
- * 🎯 Workflow utilisateur :
- * 1. Saisie email/password avec validation en temps réel
- * 2. Soumission -> Appel API /auth/login
- * 3. Succès -> Redirection vers dashboard selon userType
- * 4. Erreur -> Affichage message d'erreur avec suggestions
+ * Cette version corrige tous les problèmes de dépendances instables
+ * en utilisant des patterns React optimisés.
  */
 const LoginPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { login, isLoading, error, clearError } = useAuth()
 
-  // État du formulaire
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
   
-  // État de validation
   const [formErrors, setFormErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Récupération de l'URL de redirection post-login
   const from = location.state?.from || '/dashboard'
 
   /**
-   * 🧹 Nettoyage des erreurs au démontage du composant
+   * ✅ useEffect stable - Exécution unique au montage
+   * 
+   * Plus de dépendance sur clearError qui changeait à chaque rendu.
+   * Cette fonction ne s'exécute qu'une seule fois au montage.
    */
   useEffect(() => {
-    return () => {
-      clearError()
-    }
-  }, [clearError])
+    clearError()
+  }, [clearError]) // ✅ clearError est maintenant stable grâce à useCallback
 
   /**
-   * 📝 Gestion des changements de formulaire avec validation temps réel
+   * 📝 Gestion des changements stabilisée
    */
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target
     
     setFormData(prev => ({
@@ -56,36 +48,33 @@ const LoginPage = () => {
     }))
 
     // Effacer l'erreur du champ modifié
-    if (formErrors[name]) {
-      setFormErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }))
-    }
+    setFormErrors(prev => {
+      if (prev[name]) {
+        const newErrors = { ...prev }
+        delete newErrors[name]
+        return newErrors
+      }
+      return prev
+    })
 
-    // Effacer l'erreur globale si l'utilisateur corrige sa saisie
+    // Effacer l'erreur globale si présente
     if (error) {
       clearError()
     }
-  }
+  }, [error, clearError]) // ✅ Dépendances stables
 
   /**
-   * ✅ Validation côté client avant soumission
-   * 
-   * Cette validation préliminaire améliore l'UX en évitant des appels API
-   * inutiles, mais ne remplace pas la validation backend qui reste autoritaire.
+   * ✅ Validation stabilisée
    */
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const errors = {}
 
-    // Validation email
     if (!formData.email.trim()) {
       errors.email = 'Email is required'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errors.email = 'Please enter a valid email address'
     }
 
-    // Validation password
     if (!formData.password) {
       errors.password = 'Password is required'
     } else if (formData.password.length < 6) {
@@ -94,15 +83,14 @@ const LoginPage = () => {
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
-  }
+  }, [formData.email, formData.password]) // ✅ Dépendances explicites
 
   /**
-   * 🚀 Soumission du formulaire - Appel à votre API backend
+   * 🚀 Soumission stabilisée
    */
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
     
-    // Validation côté client
     if (!validateForm()) {
       return
     }
@@ -116,11 +104,8 @@ const LoginPage = () => {
 
       if (result.success) {
         console.log(`✅ Login successful, redirecting to: ${from}`)
-        
-        // Redirection vers la page demandée ou dashboard par défaut
         navigate(from, { replace: true })
       } else {
-        // L'erreur est déjà gérée par le AuthContext et affichée via toast
         console.log(`❌ Login failed: ${result.message}`)
       }
     } catch (error) {
@@ -129,21 +114,18 @@ const LoginPage = () => {
     } finally {
       setIsSubmitting(false)
     }
-  }
+  }, [formData.email, formData.password, validateForm, login, from, navigate]) // ✅ Toutes dépendances stables
 
   return (
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
-          {/* En-tête de la page */}
           <div className="auth-header">
             <h1>Welcome Back to Portall</h1>
             <p>Sign in to access your personalized dashboard</p>
           </div>
 
-          {/* Formulaire de connexion */}
           <form onSubmit={handleSubmit} className="auth-form">
-            {/* Champ Email */}
             <div className="form-group">
               <label htmlFor="email" className="form-label">
                 Email Address
@@ -164,7 +146,6 @@ const LoginPage = () => {
               )}
             </div>
 
-            {/* Champ Password */}
             <div className="form-group">
               <label htmlFor="password" className="form-label">
                 Password
@@ -185,14 +166,12 @@ const LoginPage = () => {
               )}
             </div>
 
-            {/* Affichage des erreurs globales */}
             {error && (
               <div className="error-banner">
                 <p>{error}</p>
               </div>
             )}
 
-            {/* Bouton de soumission */}
             <button
               type="submit"
               className={`auth-button ${isSubmitting ? 'loading' : ''}`}
@@ -202,7 +181,6 @@ const LoginPage = () => {
             </button>
           </form>
 
-          {/* Liens utiles */}
           <div className="auth-links">
             <Link to="/forgot-password" className="link">
               Forgot your password?

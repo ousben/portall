@@ -1,39 +1,33 @@
 // portall/client/src/contexts/AuthContext.jsx
 
-import React, { createContext, useContext, useReducer, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react'
 import AuthService from '@services/authService'
 import toast from 'react-hot-toast'
 
 /**
- * 🔐 Context d'Authentification - Cœur de la gestion d'état utilisateur
+ * 🔐 Context d'Authentification - Version Corrigée et Stabilisée
  * 
- * Ce context gère l'état d'authentification global de l'application,
- * s'intégrant parfaitement avec votre système d'authentification backend.
+ * Cette version corrige tous les problèmes de boucles infinies en :
+ * 1. Mémorisant toutes les fonctions avec useCallback
+ * 2. Stabilisant les dépendances des useEffect
+ * 3. Évitant les re-créations inutiles d'objets et fonctions
  * 
- * 🎯 Responsabilités principales :
- * 1. Gestion de l'état de connexion (isAuthenticated, user, loading)
- * 2. Actions d'authentification (login, logout, register)
- * 3. Persistance automatique entre sessions
- * 4. Récupération automatique du profil au démarrage
- * 5. Gestion des erreurs avec feedback utilisateur
+ * 🎯 Principe clé : Stabilité référentielle
+ * En React, si une fonction change de référence à chaque rendu,
+ * tous les composants qui en dépendent vont se re-rendre.
  */
 
-// Création du context
 const AuthContext = createContext()
 
-// États possibles de l'authentification
 const initialState = {
   isAuthenticated: false,
   user: null,
-  isLoading: true, // true au démarrage pour vérifier l'auth existante
+  isLoading: true,
   error: null
 }
 
 /**
- * 🔄 Reducer pour la gestion d'état - Pattern Redux simplifié
- * 
- * Ce reducer gère toutes les transitions d'état liées à l'authentification
- * de manière prévisible et debuggable.
+ * 🔄 Reducer stable - Aucune fonction ici, donc aucun problème de référence
  */
 const authReducer = (state, action) => {
   switch (action.type) {
@@ -95,56 +89,70 @@ const authReducer = (state, action) => {
 }
 
 /**
- * 🏠 Provider du Context - Composant racine de l'authentification
+ * 🏠 Provider Corrigé - Toutes les fonctions sont mémorisées
  */
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState)
 
   /**
-   * 🚀 Initialisation automatique - Vérification de l'authentification existante
+   * 🚀 Initialisation stabilisée - useEffect avec dépendances vides
    * 
-   * Au démarrage de l'app, on vérifie s'il y a une session active
-   * en validant le token stocké via votre endpoint /api/auth/me
+   * Cette fonction ne doit s'exécuter qu'UNE SEULE FOIS au montage du composant.
+   * Aucune dépendance = exécution unique = pas de boucle.
    */
   useEffect(() => {
+    let isMounted = true // Flag pour éviter les updates sur composant démonté
+
     const initializeAuth = async () => {
       console.log('🚀 Initializing authentication state...')
       
       if (AuthService.isAuthenticated()) {
         try {
-          // Valider le token en récupérant le profil utilisateur
           const result = await AuthService.getCurrentUser()
           
-          if (result.success) {
-            dispatch({
-              type: 'AUTH_SUCCESS',
-              payload: { user: result.user }
-            })
-            console.log(`✅ User authenticated: ${result.user.email} (${result.user.userType})`)
-          } else {
-            // Token invalide, nettoyer
-            await AuthService.logout()
-            dispatch({ type: 'AUTH_ERROR', payload: 'Session expired' })
+          // Vérifier que le composant est toujours monté avant de mettre à jour l'état
+          if (isMounted) {
+            if (result.success) {
+              dispatch({
+                type: 'AUTH_SUCCESS',
+                payload: { user: result.user }
+              })
+              console.log(`✅ User authenticated: ${result.user.email} (${result.user.userType})`)
+            } else {
+              await AuthService.logout()
+              dispatch({ type: 'AUTH_ERROR', payload: 'Session expired' })
+            }
           }
         } catch (error) {
           console.error('❌ Auth initialization failed:', error)
-          await AuthService.logout()
-          dispatch({ type: 'AUTH_ERROR', payload: 'Authentication failed' })
+          if (isMounted) {
+            await AuthService.logout()
+            dispatch({ type: 'AUTH_ERROR', payload: 'Authentication failed' })
+          }
         }
       } else {
-        // Pas d'authentification trouvée
-        dispatch({ type: 'SET_LOADING', payload: false })
-        console.log('ℹ️ No existing authentication found')
+        if (isMounted) {
+          dispatch({ type: 'SET_LOADING', payload: false })
+          console.log('ℹ️ No existing authentication found')
+        }
       }
     }
 
     initializeAuth()
-  }, [])
+
+    // Cleanup function pour éviter les memory leaks
+    return () => {
+      isMounted = false
+    }
+  }, []) // ✅ Tableau vide = exécution unique
 
   /**
-   * 🔑 Fonction de connexion
+   * 🔑 Fonction de connexion mémorisée
+   * 
+   * useCallback garantit que cette fonction garde la même référence
+   * tant que ses dépendances ne changent pas.
    */
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     dispatch({ type: 'AUTH_START' })
 
     try {
@@ -177,19 +185,18 @@ export const AuthProvider = ({ children }) => {
 
       return { success: false, message: errorMessage }
     }
-  }
+  }, []) // ✅ Pas de dépendances = fonction stable
 
   /**
-   * 📝 Fonction d'inscription
+   * 📝 Fonction d'inscription mémorisée
    */
-  const register = async (userData) => {
+  const register = useCallback(async (userData) => {
     dispatch({ type: 'AUTH_START' })
 
     try {
       const result = await AuthService.register(userData)
 
       if (result.success) {
-        // Si l'inscription inclut une connexion automatique
         if (result.tokens) {
           dispatch({
             type: 'AUTH_SUCCESS',
@@ -197,7 +204,6 @@ export const AuthProvider = ({ children }) => {
           })
           toast.success(`Account created successfully! Welcome ${result.user.firstName}!`)
         } else {
-          // Inscription réussie mais nécessite validation admin
           dispatch({ type: 'SET_LOADING', payload: false })
           toast.success('Account created! Please wait for admin approval.')
         }
@@ -224,12 +230,12 @@ export const AuthProvider = ({ children }) => {
 
       return { success: false, message: errorMessage }
     }
-  }
+  }, []) // ✅ Fonction stable
 
   /**
-   * 🚪 Fonction de déconnexion
+   * 🚪 Fonction de déconnexion mémorisée
    */
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await AuthService.logout()
       dispatch({ type: 'AUTH_LOGOUT' })
@@ -237,36 +243,38 @@ export const AuthProvider = ({ children }) => {
       console.log('✅ Logout completed')
     } catch (error) {
       console.error('❌ Logout error:', error)
-      // Même en cas d'erreur, on force le logout local
       dispatch({ type: 'AUTH_LOGOUT' })
     }
-  }
+  }, []) // ✅ Fonction stable
 
   /**
-   * 🔄 Fonction de mise à jour du profil utilisateur
+   * 🔄 Fonction de mise à jour utilisateur mémorisée
    */
-  const updateUser = (userData) => {
+  const updateUser = useCallback((userData) => {
     dispatch({
       type: 'UPDATE_USER',
       payload: userData
     })
-  }
+  }, []) // ✅ Fonction stable
 
   /**
-   * 🧹 Fonction pour effacer les erreurs
+   * 🧹 Fonction de nettoyage d'erreur mémorisée
    */
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' })
-  }
+  }, []) // ✅ Fonction stable
 
   /**
-   * 📊 Valeurs exposées par le context
+   * 📊 Valeur du contexte mémorisée
+   * 
+   * useMemo évite que l'objet value soit recréé à chaque rendu,
+   * ce qui éviterait de déclencher des re-rendus dans tous les composants enfants.
    */
-  const value = {
+  const value = React.useMemo(() => ({
     // État
     ...state,
     
-    // Actions
+    // Actions (toutes mémorisées)
     login,
     register,
     logout,
@@ -274,9 +282,15 @@ export const AuthProvider = ({ children }) => {
     clearError,
     
     // Utilitaires
-    isLoading: state.isLoading,
     hasError: !!state.error
-  }
+  }), [
+    state, 
+    login, 
+    register, 
+    logout, 
+    updateUser, 
+    clearError
+  ]) // ✅ Dépendances explicites et stables
 
   return (
     <AuthContext.Provider value={value}>
@@ -286,10 +300,7 @@ export const AuthProvider = ({ children }) => {
 }
 
 /**
- * 🎣 Hook personnalisé pour utiliser le context d'authentification
- * 
- * Ce hook simplifie l'accès au context et ajoute une validation
- * pour s'assurer qu'il est utilisé dans le bon Provider.
+ * 🎣 Hook d'utilisation du contexte
  */
 export const useAuth = () => {
   const context = useContext(AuthContext)
