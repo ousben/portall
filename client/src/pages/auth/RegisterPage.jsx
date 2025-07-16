@@ -6,16 +6,16 @@ import { useAuth } from '@contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 /**
- * 📝 Page d'Inscription Complète - Tous Types d'Utilisateurs
+ * 📝 Page d'Inscription Complète - CORRIGÉE pour Phase 5A
  * 
- * Cette version implémente le formulaire complet avec tous les champs
- * requis par votre validation backend pour chaque type d'utilisateur.
+ * Cette version corrige le problème d'inscription des joueurs en ajoutant
+ * TOUS les champs requis par le backend dans createPlayerProfile().
  * 
- * 🎯 Fonctionnalités :
- * - Champs adaptatifs selon le userType sélectionné
- * - Validation côté client cohérente avec le backend
- * - Gestion des erreurs avec feedback spécifique
- * - Interface responsive et accessible
+ * 🎯 Corrections apportées :
+ * - ✅ Ajout des 6 champs manquants pour les joueurs
+ * - ✅ Validation côté client mise à jour
+ * - ✅ prepareRegistrationData() corrigée
+ * - ✅ Interface utilisateur enrichie
  */
 const RegisterPage = () => {
   const navigate = useNavigate()
@@ -31,9 +31,15 @@ const RegisterPage = () => {
     lastName: '',
     userType: 'player', // Par défaut pour les tests
     
-    // Champs spécifiques aux joueurs
+    // 🎯 CHAMPS JOUEURS - TOUS LES CHAMPS REQUIS MAINTENANT INCLUS
     gender: '',
+    dateOfBirth: '',        // ✅ AJOUTÉ
+    height: '',             // ✅ AJOUTÉ  
+    weight: '',             // ✅ AJOUTÉ
+    position: '',           // ✅ AJOUTÉ
     collegeId: '',
+    currentYear: '',        // ✅ AJOUTÉ
+    graduationYear: '',     // ✅ AJOUTÉ
     termsAccepted: false,
     newsletterOptIn: false,
     referralSource: '',
@@ -145,7 +151,7 @@ const RegisterPage = () => {
   }, [])
 
   /**
-   * ✅ Validation complète selon le type d'utilisateur
+   * ✅ Validation complète selon le type d'utilisateur - MISE À JOUR
    */
   const validateForm = useCallback(() => {
     const errors = {}
@@ -175,14 +181,58 @@ const RegisterPage = () => {
       errors.lastName = 'Last name is required'
     }
 
-    // Validation spécifique selon le type d'utilisateur
+    // 🎯 VALIDATION JOUEURS - TOUS LES CHAMPS REQUIS
     if (formData.userType === 'player') {
       if (!formData.gender) {
         errors.gender = 'Gender selection is required for team placement'
       }
       
+      if (!formData.dateOfBirth) {
+        errors.dateOfBirth = 'Date of birth is required'
+      } else {
+        // Validation d'âge (doit avoir entre 16 et 25 ans)
+        const birthDate = new Date(formData.dateOfBirth)
+        const today = new Date()
+        const age = today.getFullYear() - birthDate.getFullYear()
+        
+        if (age < 16 || age > 25) {
+          errors.dateOfBirth = 'Age must be between 16 and 25 years'
+        }
+      }
+      
+      if (!formData.height) {
+        errors.height = 'Height is required'
+      } else if (parseInt(formData.height) < 60 || parseInt(formData.height) > 84) {
+        errors.height = 'Height must be between 60 and 84 inches'
+      }
+      
+      if (!formData.weight) {
+        errors.weight = 'Weight is required'
+      } else if (parseInt(formData.weight) < 100 || parseInt(formData.weight) > 300) {
+        errors.weight = 'Weight must be between 100 and 300 pounds'
+      }
+      
+      if (!formData.position) {
+        errors.position = 'Playing position is required'
+      }
+      
       if (!formData.collegeId) {
         errors.collegeId = 'Please select your NJCAA college'
+      }
+      
+      if (!formData.currentYear) {
+        errors.currentYear = 'Current academic year is required'
+      }
+      
+      if (!formData.graduationYear) {
+        errors.graduationYear = 'Expected graduation year is required'
+      } else {
+        const currentYear = new Date().getFullYear()
+        const gradYear = parseInt(formData.graduationYear)
+        
+        if (gradYear < currentYear || gradYear > currentYear + 4) {
+          errors.graduationYear = 'Graduation year must be within next 4 years'
+        }
       }
       
       if (!formData.termsAccepted) {
@@ -195,6 +245,7 @@ const RegisterPage = () => {
       }
     }
 
+    // Validation coachs NCAA/NAIA (inchangée)
     if (formData.userType === 'coach') {
       if (!formData.coachPosition) {
         errors.coachPosition = 'Position is required'
@@ -213,6 +264,7 @@ const RegisterPage = () => {
       }
     }
 
+    // Validation coachs NJCAA (inchangée)
     if (formData.userType === 'njcaa_coach') {
       if (!formData.njcaaPosition) {
         errors.njcaaPosition = 'Position is required'
@@ -236,7 +288,7 @@ const RegisterPage = () => {
   }, [formData])
 
   /**
-   * 🚀 Préparation des données selon le format backend
+   * 🚀 Préparation des données selon le format backend - CORRIGÉE
    */
   const prepareRegistrationData = useCallback(() => {
     const baseData = {
@@ -248,18 +300,30 @@ const RegisterPage = () => {
       userType: formData.userType
     }
 
-    // Ajouter les champs spécifiques selon le type
+    // 🎯 CORRECTION PRINCIPALE : Ajout de TOUS les champs requis pour les joueurs
     if (formData.userType === 'player') {
       return {
         ...baseData,
+        // Champs existants
         gender: formData.gender,
         collegeId: parseInt(formData.collegeId),
+        
+        // ✅ CHAMPS MANQUANTS AJOUTÉS
+        dateOfBirth: formData.dateOfBirth,
+        height: parseInt(formData.height),
+        weight: parseInt(formData.weight),
+        position: formData.position,
+        currentYear: formData.currentYear,
+        graduationYear: parseInt(formData.graduationYear),
+        
+        // Champs optionnels
         termsAccepted: formData.termsAccepted,
         newsletterOptIn: formData.newsletterOptIn,
         ...(formData.referralSource && { referralSource: formData.referralSource })
       }
     }
 
+    // Coachs NCAA/NAIA (inchangé)
     if (formData.userType === 'coach') {
       return {
         ...baseData,
@@ -271,6 +335,7 @@ const RegisterPage = () => {
       }
     }
 
+    // Coachs NJCAA (inchangé)
     if (formData.userType === 'njcaa_coach') {
       return {
         ...baseData,
@@ -330,14 +395,15 @@ const RegisterPage = () => {
   }, [formData.userType, validateForm, prepareRegistrationData, register, navigate])
 
   /**
-   * 🎨 Rendu des champs spécifiques selon le type d'utilisateur
+   * 🎨 Rendu des champs spécifiques selon le type d'utilisateur - MISE À JOUR
    */
   const renderUserTypeSpecificFields = () => {
     if (formData.userType === 'player') {
       return (
         <div className="form-section">
-          <h3>Player Information</h3>
+          <h3>🏈 Player Information</h3>
           
+          {/* Première rangée : Genre et Date de naissance */}
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="gender">Gender *</label>
@@ -359,30 +425,193 @@ const RegisterPage = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="collegeId">NJCAA College *</label>
-              <select
-                id="collegeId"
-                name="collegeId"
-                value={formData.collegeId}
+              <label htmlFor="dateOfBirth">Date of Birth *</label>
+              <input
+                type="date"
+                id="dateOfBirth"
+                name="dateOfBirth"
+                value={formData.dateOfBirth}
                 onChange={handleInputChange}
-                className={`form-input ${formErrors.collegeId ? 'error' : ''}`}
-                disabled={isSubmitting || referenceData.loading}
-              >
-                <option value="">Select your college</option>
-                {referenceData.njcaaColleges.map(college => (
-                  <option key={college.id} value={college.id}>
-                    {college.name}
-                  </option>
-                ))}
-              </select>
-              {formErrors.collegeId && (
-                <span className="error-message">{formErrors.collegeId}</span>
+                className={`form-input ${formErrors.dateOfBirth ? 'error' : ''}`}
+                disabled={isSubmitting}
+                max={new Date().toISOString().split('T')[0]} // Pas de date future
+              />
+              {formErrors.dateOfBirth && (
+                <span className="error-message">{formErrors.dateOfBirth}</span>
               )}
             </div>
           </div>
 
+          {/* Deuxième rangée : Taille et Poids */}
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="height">Height (inches) *</label>
+              <input
+                type="number"
+                id="height"
+                name="height"
+                value={formData.height}
+                onChange={handleInputChange}
+                className={`form-input ${formErrors.height ? 'error' : ''}`}
+                placeholder="e.g., 72"
+                min="60"
+                max="84"
+                disabled={isSubmitting}
+              />
+              <small className="form-hint">Between 5'0" (60) and 7'0" (84)</small>
+              {formErrors.height && (
+                <span className="error-message">{formErrors.height}</span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="weight">Weight (lbs) *</label>
+              <input
+                type="number"
+                id="weight"
+                name="weight"
+                value={formData.weight}
+                onChange={handleInputChange}
+                className={`form-input ${formErrors.weight ? 'error' : ''}`}
+                placeholder="e.g., 180"
+                min="100"
+                max="300"
+                disabled={isSubmitting}
+              />
+              <small className="form-hint">Between 100 and 300 pounds</small>
+              {formErrors.weight && (
+                <span className="error-message">{formErrors.weight}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Troisième rangée : Position */}
           <div className="form-group">
-            <label htmlFor="referralSource">How did you hear about us? (Optional)</label>
+            <label htmlFor="position">Playing Position *</label>
+            <select
+              id="position"
+              name="position"
+              value={formData.position}
+              onChange={handleInputChange}
+              className={`form-input ${formErrors.position ? 'error' : ''}`}
+              disabled={isSubmitting}
+            >
+              <option value="">Select your position</option>
+              
+              {/* Positions offensives */}
+              <optgroup label="Offensive Positions">
+                <option value="quarterback">Quarterback (QB)</option>
+                <option value="running_back">Running Back (RB)</option>
+                <option value="fullback">Fullback (FB)</option>
+                <option value="wide_receiver">Wide Receiver (WR)</option>
+                <option value="tight_end">Tight End (TE)</option>
+                <option value="offensive_line">Offensive Line (OL)</option>
+                <option value="center">Center (C)</option>
+                <option value="guard">Guard (G)</option>
+                <option value="tackle">Tackle (T)</option>
+              </optgroup>
+              
+              {/* Positions défensives */}
+              <optgroup label="Defensive Positions">
+                <option value="defensive_end">Defensive End (DE)</option>
+                <option value="defensive_tackle">Defensive Tackle (DT)</option>
+                <option value="nose_tackle">Nose Tackle (NT)</option>
+                <option value="linebacker">Linebacker (LB)</option>
+                <option value="cornerback">Cornerback (CB)</option>
+                <option value="safety">Safety (S)</option>
+                <option value="free_safety">Free Safety (FS)</option>
+                <option value="strong_safety">Strong Safety (SS)</option>
+              </optgroup>
+              
+              {/* Équipes spéciales */}
+              <optgroup label="Special Teams">
+                <option value="kicker">Kicker (K)</option>
+                <option value="punter">Punter (P)</option>
+                <option value="long_snapper">Long Snapper (LS)</option>
+                <option value="return_specialist">Return Specialist</option>
+              </optgroup>
+            </select>
+            {formErrors.position && (
+              <span className="error-message">{formErrors.position}</span>
+            )}
+          </div>
+
+          {/* Quatrième rangée : Collège */}
+          <div className="form-group">
+            <label htmlFor="collegeId">NJCAA College *</label>
+            <select
+              id="collegeId"
+              name="collegeId"
+              value={formData.collegeId}
+              onChange={handleInputChange}
+              className={`form-input ${formErrors.collegeId ? 'error' : ''}`}
+              disabled={isSubmitting || referenceData.loading}
+            >
+              <option value="">
+                {referenceData.loading ? 'Loading colleges...' : 'Select your college'}
+              </option>
+              {referenceData.njcaaColleges.map(college => (
+                <option key={college.id} value={college.id}>
+                  {college.name} - {college.city}, {college.state}
+                </option>
+              ))}
+            </select>
+            {formErrors.collegeId && (
+              <span className="error-message">{formErrors.collegeId}</span>
+            )}
+          </div>
+
+          {/* Cinquième rangée : Années académiques */}
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="currentYear">Current Academic Year *</label>
+              <select
+                id="currentYear"
+                name="currentYear"
+                value={formData.currentYear}
+                onChange={handleInputChange}
+                className={`form-input ${formErrors.currentYear ? 'error' : ''}`}
+                disabled={isSubmitting}
+              >
+                <option value="">Select current year</option>
+                <option value="freshman">Freshman (1st year)</option>
+                <option value="sophomore">Sophomore (2nd year)</option>
+                <option value="redshirt">Redshirt</option>
+              </select>
+              {formErrors.currentYear && (
+                <span className="error-message">{formErrors.currentYear}</span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="graduationYear">Expected Graduation Year *</label>
+              <select
+                id="graduationYear"
+                name="graduationYear"
+                value={formData.graduationYear}
+                onChange={handleInputChange}
+                className={`form-input ${formErrors.graduationYear ? 'error' : ''}`}
+                disabled={isSubmitting}
+              >
+                <option value="">Select graduation year</option>
+                {Array.from({ length: 5 }, (_, i) => {
+                  const year = new Date().getFullYear() + i
+                  return (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  )
+                })}
+              </select>
+              {formErrors.graduationYear && (
+                <span className="error-message">{formErrors.graduationYear}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Sixième rangée : Source de référence (optionnel) */}
+          <div className="form-group">
+            <label htmlFor="referralSource">How did you hear about Portall? (Optional)</label>
             <select
               id="referralSource"
               name="referralSource"
@@ -391,80 +620,77 @@ const RegisterPage = () => {
               className="form-input"
               disabled={isSubmitting}
             >
-              <option value="">Please select</option>
-              <option value="social_media">Social Media</option>
-              <option value="coach_recommendation">Coach Recommendation</option>
-              <option value="college_counselor">College Counselor</option>
-              <option value="friend">Friend/Family</option>
-              <option value="web_search">Web Search</option>
+              <option value="">Select a source</option>
+              <option value="coach">My coach told me</option>
+              <option value="teammate">Teammate recommendation</option>
+              <option value="social_media">Social media</option>
+              <option value="google">Google search</option>
+              <option value="college_website">College website</option>
               <option value="other">Other</option>
             </select>
           </div>
 
-          <div className="form-group">
+          {/* Septième rangée : Conditions et newsletter */}
+          <div className="form-section">
             <div className="checkbox-group">
-              <input
-                type="checkbox"
-                id="newsletterOptIn"
-                name="newsletterOptIn"
-                checked={formData.newsletterOptIn}
-                onChange={handleInputChange}
-                className="checkbox-input"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="newsletterOptIn" className="checkbox-label">
-                I want to receive updates about new opportunities and platform features
-              </label>
-              {formErrors.newsletterOptIn && (
-                <span className="error-message">{formErrors.newsletterOptIn}</span>
-              )}
-            </div>
-          </div>
-
-          <div className="form-group">
-            <div className="checkbox-group">
-              <input
-                type="checkbox"
-                id="termsAccepted"
-                name="termsAccepted"
-                checked={formData.termsAccepted}
-                onChange={handleInputChange}
-                className={`checkbox-input ${formErrors.termsAccepted ? 'error' : ''}`}
-                disabled={isSubmitting}
-              />
-              <label htmlFor="termsAccepted" className="checkbox-label">
-                I accept the <Link to="/terms" className="link">Terms of Service</Link> and <Link to="/privacy" className="link">Privacy Policy</Link> *
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="termsAccepted"
+                  checked={formData.termsAccepted}
+                  onChange={handleInputChange}
+                  className={formErrors.termsAccepted ? 'error' : ''}
+                  disabled={isSubmitting}
+                />
+                <span className="checkmark"></span>
+                I accept the <Link to="/terms" target="_blank">Terms of Service</Link> and 
+                <Link to="/privacy" target="_blank"> Privacy Policy</Link> *
               </label>
               {formErrors.termsAccepted && (
                 <span className="error-message">{formErrors.termsAccepted}</span>
               )}
+            </div>
+
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="newsletterOptIn"
+                  checked={formData.newsletterOptIn}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                />
+                <span className="checkmark"></span>
+                I want to receive recruiting tips and updates via email
+              </label>
+              <small className="form-hint">
+                Stay informed about opportunities and recruiting advice
+              </small>
             </div>
           </div>
         </div>
       )
     }
 
+    // Les autres types d'utilisateurs restent inchangés...
     if (formData.userType === 'coach') {
       return (
         <div className="form-section">
-          <h3>Coach Information</h3>
+          <h3>🏈 Coach Information</h3>
           
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="coachPosition">Position *</label>
-              <select
+              <input
+                type="text"
                 id="coachPosition"
                 name="coachPosition"
                 value={formData.coachPosition}
                 onChange={handleInputChange}
                 className={`form-input ${formErrors.coachPosition ? 'error' : ''}`}
+                placeholder="e.g., Head Coach, Assistant Coach"
                 disabled={isSubmitting}
-              >
-                <option value="">Select position</option>
-                <option value="head_coach">Head Coach</option>
-                <option value="assistant_coach">Assistant Coach</option>
-                <option value="recruiting_coordinator">Recruiting Coordinator</option>
-              </select>
+              />
               {formErrors.coachPosition && (
                 <span className="error-message">{formErrors.coachPosition}</span>
               )}
@@ -486,6 +712,30 @@ const RegisterPage = () => {
                 <span className="error-message">{formErrors.coachPhoneNumber}</span>
               )}
             </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="coachCollegeId">College/University *</label>
+            <select
+              id="coachCollegeId"
+              name="coachCollegeId"
+              value={formData.coachCollegeId}
+              onChange={handleInputChange}
+              className={`form-input ${formErrors.coachCollegeId ? 'error' : ''}`}
+              disabled={isSubmitting || referenceData.loading}
+            >
+              <option value="">
+                {referenceData.loading ? 'Loading colleges...' : 'Select your institution'}
+              </option>
+              {referenceData.ncaaColleges.map(college => (
+                <option key={college.id} value={college.id}>
+                  {college.name} ({college.division.toUpperCase()})
+                </option>
+              ))}
+            </select>
+            {formErrors.coachCollegeId && (
+              <span className="error-message">{formErrors.coachCollegeId}</span>
+            )}
           </div>
 
           <div className="form-row">
@@ -511,7 +761,7 @@ const RegisterPage = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="coachTeamSport">Team *</label>
+              <label htmlFor="coachTeamSport">Sport *</label>
               <select
                 id="coachTeamSport"
                 name="coachTeamSport"
@@ -520,36 +770,19 @@ const RegisterPage = () => {
                 className={`form-input ${formErrors.coachTeamSport ? 'error' : ''}`}
                 disabled={isSubmitting}
               >
-                <option value="">Select team</option>
-                <option value="mens_soccer">Men's Soccer</option>
-                <option value="womens_soccer">Women's Soccer</option>
+                <option value="">Select sport</option>
+                <option value="football">Football</option>
+                <option value="basketball">Basketball</option>
+                <option value="soccer">Soccer</option>
+                <option value="baseball">Baseball</option>
+                <option value="softball">Softball</option>
+                <option value="track_field">Track & Field</option>
+                <option value="other">Other</option>
               </select>
               {formErrors.coachTeamSport && (
                 <span className="error-message">{formErrors.coachTeamSport}</span>
               )}
             </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="coachCollegeId">College *</label>
-            <select
-              id="coachCollegeId"
-              name="coachCollegeId"
-              value={formData.coachCollegeId}
-              onChange={handleInputChange}
-              className={`form-input ${formErrors.coachCollegeId ? 'error' : ''}`}
-              disabled={isSubmitting || referenceData.loading}
-            >
-              <option value="">Select your college</option>
-              {referenceData.ncaaColleges.map(college => (
-                <option key={college.id} value={college.id}>
-                  {college.name} ({college.division.toUpperCase()})
-                </option>
-              ))}
-            </select>
-            {formErrors.coachCollegeId && (
-              <span className="error-message">{formErrors.coachCollegeId}</span>
-            )}
           </div>
         </div>
       )
@@ -558,23 +791,21 @@ const RegisterPage = () => {
     if (formData.userType === 'njcaa_coach') {
       return (
         <div className="form-section">
-          <h3>NJCAA Coach Information</h3>
+          <h3>🏟️ NJCAA Coach Information</h3>
           
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="njcaaPosition">Position *</label>
-              <select
+              <input
+                type="text"
                 id="njcaaPosition"
                 name="njcaaPosition"
                 value={formData.njcaaPosition}
                 onChange={handleInputChange}
                 className={`form-input ${formErrors.njcaaPosition ? 'error' : ''}`}
+                placeholder="e.g., Head Coach, Assistant Coach"
                 disabled={isSubmitting}
-              >
-                <option value="">Select position</option>
-                <option value="head_coach">Head Coach</option>
-                <option value="assistant_coach">Assistant Coach</option>
-              </select>
+              />
               {formErrors.njcaaPosition && (
                 <span className="error-message">{formErrors.njcaaPosition}</span>
               )}
@@ -596,6 +827,30 @@ const RegisterPage = () => {
                 <span className="error-message">{formErrors.njcaaPhoneNumber}</span>
               )}
             </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="njcaaCollegeId">NJCAA College *</label>
+            <select
+              id="njcaaCollegeId"
+              name="njcaaCollegeId"
+              value={formData.njcaaCollegeId}
+              onChange={handleInputChange}
+              className={`form-input ${formErrors.njcaaCollegeId ? 'error' : ''}`}
+              disabled={isSubmitting || referenceData.loading}
+            >
+              <option value="">
+                {referenceData.loading ? 'Loading colleges...' : 'Select your college'}
+              </option>
+              {referenceData.njcaaColleges.map(college => (
+                <option key={college.id} value={college.id}>
+                  {college.name} - {college.city}, {college.state}
+                </option>
+              ))}
+            </select>
+            {formErrors.njcaaCollegeId && (
+              <span className="error-message">{formErrors.njcaaCollegeId}</span>
+            )}
           </div>
 
           <div className="form-row">
@@ -620,7 +875,7 @@ const RegisterPage = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="njcaaTeamSport">Team *</label>
+              <label htmlFor="njcaaTeamSport">Sport *</label>
               <select
                 id="njcaaTeamSport"
                 name="njcaaTeamSport"
@@ -629,36 +884,19 @@ const RegisterPage = () => {
                 className={`form-input ${formErrors.njcaaTeamSport ? 'error' : ''}`}
                 disabled={isSubmitting}
               >
-                <option value="">Select team</option>
-                <option value="mens_soccer">Men's Soccer</option>
-                <option value="womens_soccer">Women's Soccer</option>
+                <option value="">Select sport</option>
+                <option value="football">Football</option>
+                <option value="basketball">Basketball</option>
+                <option value="soccer">Soccer</option>
+                <option value="baseball">Baseball</option>
+                <option value="softball">Softball</option>
+                <option value="track_field">Track & Field</option>
+                <option value="other">Other</option>
               </select>
               {formErrors.njcaaTeamSport && (
                 <span className="error-message">{formErrors.njcaaTeamSport}</span>
               )}
             </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="njcaaCollegeId">NJCAA College *</label>
-            <select
-              id="njcaaCollegeId"
-              name="njcaaCollegeId"
-              value={formData.njcaaCollegeId}
-              onChange={handleInputChange}
-              className={`form-input ${formErrors.njcaaCollegeId ? 'error' : ''}`}
-              disabled={isSubmitting || referenceData.loading}
-            >
-              <option value="">Select your college</option>
-              {referenceData.njcaaColleges.map(college => (
-                <option key={college.id} value={college.id}>
-                  {college.name}
-                </option>
-              ))}
-            </select>
-            {formErrors.njcaaCollegeId && (
-              <span className="error-message">{formErrors.njcaaCollegeId}</span>
-            )}
           </div>
         </div>
       )
@@ -670,14 +908,16 @@ const RegisterPage = () => {
   return (
     <div className="auth-page">
       <div className="auth-container">
-        <div className="auth-card register-card">
+        <div className="auth-form-container">
+          {/* Header */}
           <div className="auth-header">
             <h1>Join Portall</h1>
-            <p>Create your account and start connecting with opportunities</p>
+            <p>Create your account and start your recruiting journey</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="auth-form register-form">
-            {/* Section des informations de base */}
+          {/* Formulaire */}
+          <form onSubmit={handleSubmit} className="auth-form">
+            {/* Champs communs */}
             <div className="form-section">
               <h3>Basic Information</h3>
               

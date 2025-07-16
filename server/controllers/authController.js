@@ -6,6 +6,9 @@ const emailService = require('../services/emailService');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database.connection');
 
+// ✅ CORRECTION CRITIQUE : Import de bcrypt manquant
+const bcrypt = require('bcryptjs');
+
 /**
  * 🔐 Contrôleur d'authentification COMPLET mis à jour pour tous les types d'utilisateurs
  * 
