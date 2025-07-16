@@ -19,7 +19,7 @@ import toast from 'react-hot-toast'
 
 // Configuration de base d'Axios
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
   timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -88,10 +88,14 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${accessToken}`
     }
     
-    // Logging pour le développement
-    if (import.meta.env.VITE_LOG_LEVEL === 'debug') {
-      console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.url}`)
-    }
+    // ✅ AMÉLIORATION : Logging détaillé pour le débogage
+    console.log(`🔄 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`)
+    console.log('📋 Request config:', {
+      url: config.url,
+      method: config.method,
+      baseURL: config.baseURL,
+      headers: config.headers
+    })
     
     return config
   },
@@ -111,14 +115,38 @@ api.interceptors.request.use(
  */
 api.interceptors.response.use(
   (response) => {
-    // Logging des réponses réussies
-    if (import.meta.env.VITE_LOG_LEVEL === 'debug') {
-      console.log('✅ API Response:', response.status, response.config.url)
-    }
-    
+    console.log(`✅ API Response: ${response.status} ${response.config.url}`)
     return response
   },
   async (error) => {
+    console.error('❌ API Error Details:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL
+    })
+
+    // ✅ AMÉLIORATION : Diagnostic spécifique selon le type d'erreur
+    if (error.code === 'ECONNREFUSED') {
+      console.error('🚨 CONNECTION REFUSED: Backend server is not running or wrong port')
+      toast.error('Cannot connect to server. Please check if backend is running.')
+      return Promise.reject({
+        ...error,
+        message: 'Backend server is not running. Please start the server and try again.'
+      })
+    }
+
+    if (error.code === 'NETWORK_ERROR' || !error.response) {
+      console.error('🚨 NETWORK ERROR: Cannot reach backend server')
+      toast.error('Network error. Please check your connection and server.')
+      return Promise.reject({
+        ...error,
+        message: 'Network error. Please check if the backend server is running.'
+      })
+    }
+
     const originalRequest = error.config
     
     // Gestion du token expiré (401)
@@ -139,7 +167,6 @@ api.interceptors.response.use(
           const { tokens } = refreshResponse.data.data
           setTokens(tokens.accessToken, tokens.refreshToken)
           
-          // Retry la requête originale avec le nouveau token
           originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`
           
           console.log('✅ Token refreshed successfully')
@@ -147,36 +174,23 @@ api.interceptors.response.use(
           
         } catch (refreshError) {
           console.error('❌ Token refresh failed:', refreshError)
-          
-          // Refresh échoué, nettoyer et rediriger
           removeTokens()
           toast.error('Session expired. Please login again.')
-          
-          // Redirection vers login (sera gérée par le router)
           window.location.href = '/login'
-          
           return Promise.reject(refreshError)
         }
       } else {
-        // Pas de refresh token, redirection directe
         removeTokens()
         window.location.href = '/login'
       }
     }
     
     // Gestion des autres erreurs avec messages utilisateur amicaux
-    const errorMessage = error.response?.data?.message || 'An unexpected error occurred'
+    const errorMessage = error.response?.data?.message || error.message || 'An unexpected error occurred'
     
-    // Afficher les erreurs via toast (sauf pour certaines requêtes silencieuses)
     if (!originalRequest.silent) {
       toast.error(errorMessage)
     }
-    
-    console.error('❌ API Error:', {
-      status: error.response?.status,
-      message: errorMessage,
-      url: error.config?.url
-    })
     
     return Promise.reject(error)
   }

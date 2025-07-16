@@ -11,12 +11,24 @@ export default defineConfig({
   // Configuration du serveur de développement
   server: {
     port: 3000,
-    // ✅ Proxy automatique vers votre API backend sur le bon port
+    // ✅ CORRECTION : Proxy vers le bon port backend
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:5000', // ← Corrigé pour pointer vers 5000
         changeOrigin: true,
         secure: false,
+        // Ajout de logging pour débogage
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('🚨 Proxy error:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('🔄 Proxying request:', req.method, req.url, '→', proxyReq.path);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('✅ Proxy response:', proxyRes.statusCode, req.url);
+          });
+        }
       }
     }
   },
