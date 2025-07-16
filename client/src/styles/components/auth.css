@@ -410,6 +410,84 @@ select.form-input {
   color: var(--color-primary-700);
 }
 
+/* ===== STYLES POUR LES CHECKBOXES ET NOUVEAUX ÉLÉMENTS ===== */
+
+.checkbox-group {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.checkbox-input {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid var(--color-gray-300);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 0.2rem; /* Alignement avec le texte */
+}
+
+.checkbox-input:checked {
+  background-color: var(--color-primary-600);
+  border-color: var(--color-primary-600);
+}
+
+.checkbox-input:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: var(--font-weight-bold);
+}
+
+.checkbox-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-200);
+}
+
+.checkbox-input.error {
+  border-color: var(--color-error-500);
+}
+
+.checkbox-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
+  cursor: pointer;
+  flex: 1;
+}
+
+.checkbox-label .link {
+  color: var(--color-primary-600);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Responsive pour les checkboxes */
+@media (max-width: var(--breakpoint-mobile)) {
+  .checkbox-group {
+    gap: var(--space-xs);
+  }
+  
+  .checkbox-input {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  
+  .checkbox-label {
+    font-size: var(--font-size-xs);
+  }
+}
+
 /* ===== RESPONSIVE ENHANCEMENTS ===== */
 
 /* Optimisations pour iPhone */
