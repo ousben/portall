@@ -1,6 +1,6 @@
 // portall/server/controllers/authController.js
 
-const { User, PlayerProfile, CoachProfile, NJCAACoachProfile } = require('../models');
+const { User, PlayerProfile, CoachProfile, NJCAACoachProfile, NJCAACollege, NCAACollege } = require('../models');
 const AuthService = require('../services/authService');
 const emailService = require('../services/emailService');
 const { Op } = require('sequelize');
