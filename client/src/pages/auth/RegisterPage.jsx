@@ -6,22 +6,25 @@ import { useAuth } from '@contexts/AuthContext'
 import toast from 'react-hot-toast'
 
 /**
- * 📝 Page d'Inscription Complète - CORRIGÉE pour Phase 5A
+ * 📝 Page d'Inscription Complète - VERSION CORRIGÉE FINALE
  * 
- * Cette version corrige le problème d'inscription des joueurs en ajoutant
- * TOUS les champs requis par le backend dans createPlayerProfile().
+ * Cette version intègre toutes les corrections identifiées durant le débogage :
+ * - ✅ Correction du dropdown referralSource avec valeurs exactes du backend
+ * - ✅ Ajout de logging détaillé pour le debugging
+ * - ✅ Correction de prepareRegistrationData avec validation finale
+ * - ✅ Valeurs par défaut explicites dans useState
+ * - ✅ Maintien de toute la logique existante pour les autres types d'utilisateurs
  * 
  * 🎯 Corrections apportées :
- * - ✅ Ajout des 6 champs manquants pour les joueurs
- * - ✅ Validation côté client mise à jour
- * - ✅ prepareRegistrationData() corrigée
- * - ✅ Interface utilisateur enrichie
+ * - Résolution du problème "Missing required player fields"
+ * - Alignement des valeurs referralSource avec le backend
+ * - Ajout de sécurités supplémentaires côté client
  */
 const RegisterPage = () => {
   const navigate = useNavigate()
   const { register, isLoading, clearError } = useAuth()
 
-  // État du formulaire avec TOUS les champs possibles
+  // 🔧 CORRECTION 1 : État du formulaire avec valeurs par défaut explicites
   const [formData, setFormData] = useState({
     // Champs communs à tous les types
     email: '',
@@ -31,18 +34,18 @@ const RegisterPage = () => {
     lastName: '',
     userType: 'player', // Par défaut pour les tests
     
-    // 🎯 CHAMPS JOUEURS - TOUS LES CHAMPS REQUIS MAINTENANT INCLUS
+    // 🎯 CHAMPS JOUEURS - VALEURS PAR DÉFAUT EXPLICITES (évite undefined)
     gender: '',
-    dateOfBirth: '',        // ✅ AJOUTÉ
-    height: '',             // ✅ AJOUTÉ  
-    weight: '',             // ✅ AJOUTÉ
-    position: '',           // ✅ AJOUTÉ
+    dateOfBirth: '',        // ✅ Chaîne vide explicite
+    height: '',             // ✅ Chaîne vide explicite  
+    weight: '',             // ✅ Chaîne vide explicite
+    position: '',           // ✅ Chaîne vide explicite
     collegeId: '',
-    currentYear: '',        // ✅ AJOUTÉ
-    graduationYear: '',     // ✅ AJOUTÉ
+    currentYear: '',        // ✅ Chaîne vide explicite
+    graduationYear: '',     // ✅ Chaîne vide explicite
     termsAccepted: false,
     newsletterOptIn: false,
-    referralSource: '',
+    referralSource: '',     // ✅ Chaîne vide explicite
     
     // Champs spécifiques aux coachs NCAA/NAIA
     coachPosition: '',
@@ -70,7 +73,7 @@ const RegisterPage = () => {
   })
 
   /**
-   * 🔄 Chargement des données de référence (collèges)
+   * 🔄 Chargement des données de référence (collèges) - INCHANGÉ
    */
   useEffect(() => {
     const loadReferenceData = async () => {
@@ -100,14 +103,14 @@ const RegisterPage = () => {
   }, [])
 
   /**
-   * ✅ Nettoyage d'erreur au montage
+   * ✅ Nettoyage d'erreur au montage - INCHANGÉ
    */
   useEffect(() => {
     clearError()
   }, [clearError])
 
   /**
-   * 📝 Gestion des changements avec réinitialisation conditionnelle
+   * 📝 Gestion des changements avec réinitialisation conditionnelle - INCHANGÉ
    */
   const handleInputChange = useCallback((e) => {
     const { name, value, type, checked } = e.target
@@ -151,7 +154,7 @@ const RegisterPage = () => {
   }, [])
 
   /**
-   * ✅ Validation complète selon le type d'utilisateur - MISE À JOUR
+   * ✅ Validation complète selon le type d'utilisateur - INCHANGÉ
    */
   const validateForm = useCallback(() => {
     const errors = {}
@@ -288,7 +291,7 @@ const RegisterPage = () => {
   }, [formData])
 
   /**
-   * 🚀 Préparation des données selon le format backend - CORRIGÉE
+   * 🔧 CORRECTION 2 : Préparation des données avec validation finale côté client
    */
   const prepareRegistrationData = useCallback(() => {
     const baseData = {
@@ -300,27 +303,36 @@ const RegisterPage = () => {
       userType: formData.userType
     }
 
-    // 🎯 CORRECTION PRINCIPALE : Ajout de TOUS les champs requis pour les joueurs
+    // 🎯 JOUEURS : TOUS les champs requis avec vérifications
     if (formData.userType === 'player') {
-      return {
+      const playerData = {
         ...baseData,
-        // Champs existants
-        gender: formData.gender,
-        collegeId: parseInt(formData.collegeId),
+        // Champs requis par createPlayerProfile - TOUS présents et validés
+        gender: formData.gender || '',
+        dateOfBirth: formData.dateOfBirth || '',
+        height: formData.height ? parseInt(formData.height) : '',
+        weight: formData.weight ? parseInt(formData.weight) : '',
+        position: formData.position || '',
+        collegeId: formData.collegeId ? parseInt(formData.collegeId) : '',
+        currentYear: formData.currentYear || '',
+        graduationYear: formData.graduationYear ? parseInt(formData.graduationYear) : '',
         
-        // ✅ CHAMPS MANQUANTS AJOUTÉS
-        dateOfBirth: formData.dateOfBirth,
-        height: parseInt(formData.height),
-        weight: parseInt(formData.weight),
-        position: formData.position,
-        currentYear: formData.currentYear,
-        graduationYear: parseInt(formData.graduationYear),
-        
-        // Champs optionnels
-        termsAccepted: formData.termsAccepted,
-        newsletterOptIn: formData.newsletterOptIn,
+        // Champs optionnels (ne causent pas d'erreur s'ils manquent)
+        termsAccepted: formData.termsAccepted || false,
+        newsletterOptIn: formData.newsletterOptIn || false,
         ...(formData.referralSource && { referralSource: formData.referralSource })
       }
+
+      // 🔍 Validation finale côté client (sécurité supplémentaire)
+      const requiredPlayerFields = ['gender', 'dateOfBirth', 'height', 'weight', 'position', 'collegeId', 'currentYear', 'graduationYear']
+      const missingFields = requiredPlayerFields.filter(field => !playerData[field] && playerData[field] !== 0)
+      
+      if (missingFields.length > 0) {
+        console.error('❌ Missing required fields before sending:', missingFields)
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`)
+      }
+
+      return playerData
     }
 
     // Coachs NCAA/NAIA (inchangé)
@@ -351,7 +363,7 @@ const RegisterPage = () => {
   }, [formData])
 
   /**
-   * 🚀 Soumission du formulaire
+   * 🔧 CORRECTION 3 : Soumission du formulaire avec logging détaillé
    */
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
@@ -365,7 +377,22 @@ const RegisterPage = () => {
 
     try {
       const registrationData = prepareRegistrationData()
-      console.log(`📝 Attempting registration for ${formData.userType}:`, registrationData)
+      
+      // 🔍 DEBUG : Vérification détaillée des données avant envoi
+      console.log('=== DEBUG REGISTRATION DATA ===')
+      console.log('All form data:', formData)
+      console.log('Prepared registration data:', registrationData)
+      
+      // Vérification spécifique pour les joueurs
+      if (formData.userType === 'player') {
+        const requiredFields = ['dateOfBirth', 'height', 'weight', 'position', 'gender', 'collegeId', 'currentYear', 'graduationYear']
+        console.log('Required player fields check:')
+        requiredFields.forEach(field => {
+          const value = registrationData[field]
+          console.log(`  ${field}: ${value} (type: ${typeof value}, empty: ${!value})`)
+        })
+      }
+      console.log('=== END DEBUG ===')
       
       const result = await register(registrationData)
 
@@ -395,7 +422,7 @@ const RegisterPage = () => {
   }, [formData.userType, validateForm, prepareRegistrationData, register, navigate])
 
   /**
-   * 🎨 Rendu des champs spécifiques selon le type d'utilisateur - MISE À JOUR
+   * 🎨 Rendu des champs spécifiques selon le type d'utilisateur
    */
   const renderUserTypeSpecificFields = () => {
     if (formData.userType === 'player') {
@@ -609,7 +636,7 @@ const RegisterPage = () => {
             </div>
           </div>
 
-          {/* Sixième rangée : Source de référence (optionnel) */}
+          {/* 🔧 CORRECTION 4 : Sixième rangée - Source de référence avec valeurs backend */}
           <div className="form-group">
             <label htmlFor="referralSource">How did you hear about Portall? (Optional)</label>
             <select
@@ -621,16 +648,17 @@ const RegisterPage = () => {
               disabled={isSubmitting}
             >
               <option value="">Select a source</option>
-              <option value="coach">My coach told me</option>
-              <option value="teammate">Teammate recommendation</option>
+              {/* ✅ VALEURS CORRIGÉES pour correspondre exactement au backend */}
+              <option value="coach_recommendation">My coach told me</option>
+              <option value="friend">Teammate/Friend recommendation</option>
               <option value="social_media">Social media</option>
-              <option value="google">Google search</option>
-              <option value="college_website">College website</option>
+              <option value="web_search">Google search</option>
+              <option value="college_counselor">College counselor</option>
               <option value="other">Other</option>
             </select>
           </div>
 
-          {/* Septième rangée : Conditions et newsletter */}
+          {/* Septième rangée : Conditions et newsletter - INCHANGÉ */}
           <div className="form-section">
             <div className="checkbox-group">
               <label className="checkbox-label">
@@ -672,7 +700,7 @@ const RegisterPage = () => {
       )
     }
 
-    // Les autres types d'utilisateurs restent inchangés...
+    // Formulaire Coach NCAA/NAIA - COMPLÈTEMENT INCHANGÉ
     if (formData.userType === 'coach') {
       return (
         <div className="form-section">
@@ -788,6 +816,7 @@ const RegisterPage = () => {
       )
     }
 
+    // Formulaire Coach NJCAA - COMPLÈTEMENT INCHANGÉ
     if (formData.userType === 'njcaa_coach') {
       return (
         <div className="form-section">
@@ -909,15 +938,15 @@ const RegisterPage = () => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-form-container">
-          {/* Header */}
+          {/* Header - INCHANGÉ */}
           <div className="auth-header">
             <h1>Join Portall</h1>
             <p>Create your account and start your recruiting journey</p>
           </div>
 
-          {/* Formulaire */}
+          {/* Formulaire principal */}
           <form onSubmit={handleSubmit} className="auth-form">
-            {/* Champs communs */}
+            {/* Champs communs - COMPLÈTEMENT INCHANGÉ */}
             <div className="form-section">
               <h3>Basic Information</h3>
               
@@ -1033,7 +1062,7 @@ const RegisterPage = () => {
             {/* Champs spécifiques selon le type d'utilisateur */}
             {renderUserTypeSpecificFields()}
 
-            {/* Bouton de soumission */}
+            {/* Bouton de soumission - INCHANGÉ */}
             <button
               type="submit"
               className={`auth-button ${isSubmitting ? 'loading' : ''}`}
@@ -1043,7 +1072,7 @@ const RegisterPage = () => {
             </button>
           </form>
 
-          {/* Liens utiles */}
+          {/* Liens utiles - COMPLÈTEMENT INCHANGÉ */}
           <div className="auth-links">
             <div className="auth-redirect">
               <span>Already have an account? </span>
