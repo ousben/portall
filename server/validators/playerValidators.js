@@ -205,8 +205,8 @@ const playerRegistrationSchema = Joi.object({
           throw new Error('Le collège sélectionné n\'accepte plus les nouvelles inscriptions');
         }
         
-        // Retour enrichi pour utilisation potentielle dans les étapes suivantes
-        return { collegeId: value, collegeData: college };
+        // Retourner seulement la valeur validée
+        return value;
         
       } catch (error) {
         throw new Error(`Erreur de validation du collège : ${error.message}`);
