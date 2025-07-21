@@ -165,12 +165,19 @@ class AuthController {
   }
 
   /**
-   * 👤 Création du profil joueur (méthode existante étendue)
+   * 👤 Création du profil joueur avec conversion d'unités (VERSION CORRIGÉE)
+   * 
+   * Cette version ajoute la conversion automatique des unités impériales (interface)
+   * vers les unités métriques (base de données) pour assurer la cohérence des validations.
+   * 
+   * 🎯 Conversions appliquées :
+   * - Height : Pouces → Centimètres (× 2.54)
+   * - Weight : Livres → Kilogrammes (÷ 2.205)
    */
   static async createPlayerProfile(userId, profileData, transaction) {
     try {
       console.log(`👤 Creating player profile for user ${userId}`);
-      
+    
       const { 
         dateOfBirth, 
         height, 
@@ -187,17 +194,25 @@ class AuthController {
         throw new Error('Missing required player fields');
       }
 
+      // 🔧 CONVERSION D'UNITÉS IMPÉRIALES → MÉTRIQUES
+      // Cette conversion assure la cohérence avec les validations Sequelize
+      const heightInCm = Math.round(height * 2.54);        // Pouces → Centimètres  
+      const weightInKg = Math.round(weight / 2.205);       // Livres → Kilogrammes
+    
+      console.log(`📏 Unit conversion - Height: ${height}" → ${heightInCm}cm, Weight: ${weight}lbs → ${weightInKg}kg`);
+
       // Vérifier que le college NJCAA existe
       const college = await NJCAACollege.findByPk(collegeId);
       if (!college || !college.isActive) {
         throw new Error('Invalid or inactive NJCAA college');
       }
 
+      // Créer le profil avec les valeurs converties
       const playerProfile = await PlayerProfile.create({
         userId: userId,
         dateOfBirth: new Date(dateOfBirth),
-        height: parseInt(height),
-        weight: parseInt(weight),
+        height: heightInCm,              // ✅ Valeur convertie en cm
+        weight: weightInKg,              // ✅ Valeur convertie en kg
         position: position,
         gender: gender,
         collegeId: collegeId,
@@ -208,9 +223,9 @@ class AuthController {
       }, { transaction });
 
       console.log(`✅ Player profile created successfully (ID: ${playerProfile.id})`);
-      
+    
       return playerProfile;
-      
+    
     } catch (error) {
       console.error('Error creating player profile:', error);
       throw new Error(`Player profile creation failed: ${error.message}`);
