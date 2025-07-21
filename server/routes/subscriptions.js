@@ -1,22 +1,5 @@
 // portall/server/routes/subscriptions.js
 
-/**
- * Routes des abonnements Portall
- * 
- * Ce fichier définit tous les endpoints liés à la gestion des abonnements.
- * Chaque route suit le pattern REST et inclut les middleware appropriés
- * pour la sécurité, la validation, et la gestion d'erreur.
- * 
- * Architecture des routes :
- * Route -> Middleware(s) -> Controller -> Service -> Model -> Database/Stripe
- * 
- * Sécurité multicouche :
- * 1. Rate limiting (protection contre le spam)
- * 2. Authentification JWT (utilisateur connecté)
- * 3. Validation des données (format et contenu)
- * 4. Autorisation métier (droits spécifiques)
- */
-
 const express = require('express');
 const router = express.Router();
 
@@ -29,13 +12,44 @@ const rateLimit = require('express-rate-limit');
 const subscriptionController = require('../controllers/subscriptionController');
 
 /**
- * Configuration du rate limiting spécifique aux paiements
+ * 🚫 NOUVEAU MIDDLEWARE : Protection contre l'accès des coachs aux abonnements
  * 
- * Les opérations de paiement sont sensibles et peuvent être coûteuses.
- * Nous appliquons des limites strictes pour éviter les abus et les erreurs.
+ * Ce middleware implémente la nouvelle politique où seuls les joueurs
+ * peuvent créer des abonnements. Les coachs ont maintenant un accès gratuit.
+ * 
+ * Analogie pédagogique : C'est comme un panneau "Accès réservé aux membres VIP"
+ * devant certaines sections d'un club. Les coachs ont accès au club (plateforme)
+ * mais plus besoin de payer pour les services premium.
  */
+const restrictSubscriptionsToPlayers = (req, res, next) => {
+  // Permettre la consultation des plans pour information (route GET /plans)
+  if (req.method === 'GET' && req.path === '/plans') {
+    return next();
+  }
+  
+  // Pour toutes les autres actions (création, annulation), vérifier le type d'utilisateur
+  if (req.user && req.user.userType !== 'player') {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Subscription management is currently available for players only. Coaches have free access to the platform.',
+      code: 'SUBSCRIPTION_NOT_REQUIRED',
+      userType: req.user.userType,
+      accessPolicy: {
+        coaches: 'Free access to all coaching features',
+        players: 'Subscription required for premium features (future implementation)'
+      },
+      redirectTo: req.user.userType === 'coach' || req.user.userType === 'njcaa_coach' 
+        ? '/dashboard/coach' 
+        : '/dashboard'
+    });
+  }
+  
+  next();
+};
 
-// Rate limiting pour les consultations (plus permissif)
+/**
+ * Configuration du rate limiting spécifique aux paiements
+ */
 const readRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // 100 requêtes par fenêtre par IP
@@ -48,7 +62,6 @@ const readRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Rate limiting pour les créations/modifications (plus restrictif)
 const writeRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 tentatives de paiement par fenêtre par IP
@@ -59,87 +72,64 @@ const writeRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Options spécifiques pour les paiements
-  skipSuccessfulRequests: true, // Ne compter que les échecs
+  skipSuccessfulRequests: true,
   keyGenerator: (req) => {
-    // Combiner IP et utilisateur pour un rate limiting plus précis
     return req.user ? `${req.ip}_${req.user.id}` : req.ip;
   }
 });
 
 /**
- * GET /api/subscriptions/plans
- * 
- * Récupère tous les plans d'abonnement disponibles
- * 
- * Route publique - Pas d'authentification requise
- * Utilisée pour afficher les tarifs sur la page de pricing
+ * ROUTES DES ABONNEMENTS
  */
+
+// GET /api/subscriptions/plans - Consultation libre des plans (pour information)
 router.get('/plans', 
   readRateLimit,
   subscriptionController.getAvailablePlans
 );
 
-/**
- * POST /api/subscriptions/create
- * 
- * Crée un nouvel abonnement pour l'utilisateur authentifié
- * 
- * Route protégée - Authentification requise
- * Validation stricte des données de paiement
- * Rate limiting restrictif pour éviter les abus
- */
+// POST /api/subscriptions/create - PROTÉGÉ : Seulement pour les joueurs
 router.post('/create',
   writeRateLimit,
-  authenticate, // L'utilisateur doit être connecté
-  validateSubscriptionData.createSubscription, // Validation des données
+  authenticate,
+  restrictSubscriptionsToPlayers, // NOUVEAU : Middleware de protection
+  validateSubscriptionData.createSubscription,
   subscriptionController.createSubscription
 );
 
-/**
- * GET /api/subscriptions/my-subscription
- * 
- * Récupère l'abonnement actuel de l'utilisateur authentifié
- * 
- * Route protégée - L'utilisateur ne peut voir que son propre abonnement
- */
+// GET /api/subscriptions/my-subscription - PROTÉGÉ : Seulement pour les joueurs
 router.get('/my-subscription',
   readRateLimit,
   authenticate,
+  restrictSubscriptionsToPlayers, // NOUVEAU : Middleware de protection
   subscriptionController.getMySubscription
 );
 
-/**
- * POST /api/subscriptions/cancel
- * 
- * Annule l'abonnement de l'utilisateur authentifié
- * 
- * Route protégée avec validation de la raison d'annulation
- */
+// POST /api/subscriptions/cancel - PROTÉGÉ : Seulement pour les joueurs  
 router.post('/cancel',
   writeRateLimit,
   authenticate,
-  validateSubscriptionData.cancelSubscription, // Validation optionnelle
+  restrictSubscriptionsToPlayers, // NOUVEAU : Middleware de protection
+  validateSubscriptionData.cancelSubscription,
   subscriptionController.cancelSubscription
 );
 
-/**
- * GET /api/subscriptions/health
- * 
- * Endpoint de santé pour vérifier que le service d'abonnement fonctionne
- * 
- * Utile pour le monitoring et les tests automatisés
- */
+// GET /api/subscriptions/health - Route de santé (publique)
 router.get('/health', (req, res) => {
   res.json({
     status: 'success',
     message: 'Subscription service is healthy',
     timestamp: new Date().toISOString(),
+    accessPolicy: {
+      version: '2.0',
+      coaches: 'Free access to platform - no subscription required',
+      players: 'Subscription-based access (future implementation)'
+    },
     endpoints: {
-      'GET /plans': 'public',
-      'POST /create': 'authenticated',
-      'GET /my-subscription': 'authenticated', 
-      'POST /cancel': 'authenticated'
+      'GET /plans': 'public - view available plans',
+      'POST /create': 'players only - create subscription',
+      'GET /my-subscription': 'players only - view current subscription', 
+      'POST /cancel': 'players only - cancel subscription'
     }
   });
 });

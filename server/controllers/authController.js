@@ -762,33 +762,30 @@ class AuthController {
   // ========================
 
   /**
-   * 🆕 Message de succès d'inscription adapté au type d'utilisateur
+   * 📝 NOUVEAU : Messages d'inscription unifiés pour tous les coachs
    * 
-   * Cette méthode retourne un message personnalisé selon le type
-   * d'utilisateur pour améliorer l'expérience utilisateur.
+   * Modifiez cette méthode existante pour éliminer les différences
+   * de messaging entre les types de coachs.
    */
   static getRegistrationSuccessMessage(userType) {
     const messages = {
       player: 'Player account created successfully! Your account is pending admin approval.',
-      coach: 'Coach account created successfully! Your account is pending admin approval.',
-      njcaa_coach: 'NJCAA Coach account created successfully! Your account is pending admin approval and you will receive access to your player evaluation dashboard once approved.'
+      // MODIFICATION : Message unifié pour TOUS les types de coachs
+      coach: 'Coach account created successfully! Your account is pending admin approval and you will receive access to your coaching dashboard once approved.',
+      njcaa_coach: 'Coach account created successfully! Your account is pending admin approval and you will receive access to your coaching dashboard once approved.',
+      admin: 'Admin account created successfully! Please contact your system administrator for activation.'
     };
-    
+  
     return messages[userType] || 'Account created successfully! Your account is pending admin approval.';
   }
 
   /**
-   * 📧 Notification automatique des admins pour nouvelles inscriptions
+   * 📧 NOUVEAU : Notification admin unifiée
    * 
-   * Cette méthode récupère tous les administrateurs actifs et leur envoie
-   * une notification de nouvelle inscription nécessitant leur attention.
-   * 
-   * 🎯 Pattern utilisé : Service discovery pattern - on trouve dynamiquement
-   * tous les admins plutôt que d'avoir une liste codée en dur.
+   * Modifiez cette méthode pour traiter tous les coachs comme un seul groupe.
    */
   static async notifyAdminsOfNewRegistration(newUser) {
     try {
-      // Récupérer tous les emails des admins actifs
       const adminUsers = await User.findAll({
         where: {
           userType: 'admin',
@@ -803,27 +800,32 @@ class AuthController {
       }
 
       const adminEmails = adminUsers.map(admin => admin.email);
-      
-      console.log(`📧 Notifying ${adminEmails.length} admins of new ${newUser.userType} registration`);
-      
-      // Envoyer la notification à tous les admins simultanément
-      const results = await emailService.sendNewRegistrationNotificationToAdmin(newUser, adminEmails);
-      
-      // Vérifier les résultats d'envoi
+    
+      // MODIFICATION : Message unifié pour l'administration
+      const userTypeForAdmin = (newUser.userType === 'coach' || newUser.userType === 'njcaa_coach') 
+        ? 'coach' 
+        : newUser.userType;
+    
+      console.log(`📧 Notifying ${adminEmails.length} admins of new ${userTypeForAdmin} registration (unified workflow)`);
+    
+      const results = await emailService.sendNewRegistrationNotificationToAdmin(
+        newUser, 
+        adminEmails,
+        { workflow: 'unified' } // NOUVEAU : Paramètre pour workflow unifié
+      );
+    
       const successfulSends = results.filter(result => result.success).length;
       const failedSends = results.length - successfulSends;
-      
+    
       if (failedSends > 0) {
         console.warn(`⚠️ ${failedSends} admin notifications failed to send`);
       }
-      
-      console.log(`📧 Successfully notified ${successfulSends}/${adminEmails.length} admins`);
+    
+      console.log(`📧 Successfully notified ${successfulSends}/${adminEmails.length} admins (unified workflow)`);
       return results;
 
     } catch (error) {
       console.error('❌ Error notifying admins of new registration:', error);
-      // On ne lance pas l'erreur car ce n'est pas critique pour l'inscription
-      // L'admin peut toujours voir les nouveaux comptes dans son dashboard
     }
   }
 
