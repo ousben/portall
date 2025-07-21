@@ -805,6 +805,44 @@ const RegisterPage = () => {
               )}
             </div>
           </div>
+
+          <div className="form-section">
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="termsAccepted"
+                  checked={formData.termsAccepted}
+                  onChange={handleInputChange}
+                  className={formErrors.termsAccepted ? 'error' : ''}
+                  disabled={isSubmitting}
+                />
+                <span className="checkmark"></span>
+                I accept the <Link to="/terms" target="_blank">Terms of Service</Link> and 
+                <Link to="/privacy" target="_blank"> Privacy Policy</Link> *
+              </label>
+              {formErrors.termsAccepted && (
+                <span className="error-message">{formErrors.termsAccepted}</span>
+              )}
+            </div>
+
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="newsletterOptIn"
+                  checked={formData.newsletterOptIn}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                />
+                <span className="checkmark"></span>
+                I want to receive recruiting tips and updates via email
+              </label>
+              <small className="form-hint">
+                Stay informed about opportunities and recruiting advice
+              </small>
+            </div>
+          </div>
         </div>
       )
     }
@@ -916,6 +954,44 @@ const RegisterPage = () => {
               {formErrors.njcaaTeamSport && (
                 <span className="error-message">{formErrors.njcaaTeamSport}</span>
               )}
+            </div>
+          </div>
+
+          <div className="form-section">
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="termsAccepted"
+                  checked={formData.termsAccepted}
+                  onChange={handleInputChange}
+                  className={formErrors.termsAccepted ? 'error' : ''}
+                  disabled={isSubmitting}
+                />
+                <span className="checkmark"></span>
+                I accept the <Link to="/terms" target="_blank">Terms of Service</Link> and 
+                <Link to="/privacy" target="_blank"> Privacy Policy</Link> *
+              </label>
+              {formErrors.termsAccepted && (
+                <span className="error-message">{formErrors.termsAccepted}</span>
+              )}
+            </div>
+
+            <div className="checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="newsletterOptIn"
+                  checked={formData.newsletterOptIn}
+                  onChange={handleInputChange}
+                  disabled={isSubmitting}
+                />
+                <span className="checkmark"></span>
+                I want to receive recruiting tips and updates via email
+              </label>
+              <small className="form-hint">
+                Stay informed about opportunities and recruiting advice
+              </small>
             </div>
           </div>
         </div>
