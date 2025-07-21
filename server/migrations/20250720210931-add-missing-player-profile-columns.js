@@ -15,6 +15,7 @@
  * 
  * 🏗️ Approche architecturale :
  * - Migration incrémentale (addColumn) plutôt que reconstruction complète
+ * - Vérification intelligente de l'existence des colonnes
  * - Valeurs par défaut sécurisées pour les données existantes
  * - Indexes optimisés pour les performances de recherche
  * - Commentaires explicites pour la documentation
@@ -25,70 +26,95 @@ module.exports = {
     console.log('🔧 Adding missing columns to player_profiles table...');
 
     // Vérifier d'abord si la table existe
-    const tableExists = await queryInterface.describeTable('player_profiles').catch(() => false);
-    if (!tableExists) {
+    const tableDescription = await queryInterface.describeTable('player_profiles').catch(() => false);
+    if (!tableDescription) {
       throw new Error('Table player_profiles does not exist. Please run the base migration first.');
     }
 
+    console.log('📋 Current table structure analyzed. Checking for missing columns...');
+
     try {
+      // ========================
+      // FONCTION UTILITAIRE POUR VÉRIFIER ET AJOUTER LES COLONNES
+      // ========================
+      
+      const addColumnIfNotExists = async (columnName, columnDefinition, description) => {
+        if (!tableDescription[columnName]) {
+          console.log(`➕ Adding ${columnName} column (${description})...`);
+          await queryInterface.addColumn('player_profiles', columnName, columnDefinition);
+          console.log(`✅ ${columnName} column added successfully`);
+        } else {
+          console.log(`⏭️ ${columnName} column already exists, skipping...`);
+        }
+      };
+
       // ========================
       // AJOUT DES COLONNES MANQUANTES CRITIQUES
       // ========================
 
-      console.log('📅 Adding date_of_birth column...');
-      await queryInterface.addColumn('player_profiles', 'date_of_birth', {
+      await addColumnIfNotExists('date_of_birth', {
         type: Sequelize.DATEONLY,
         allowNull: true, // Temporairement nullable pour les données existantes
         comment: 'Date de naissance du joueur (format YYYY-MM-DD)'
-      });
+      }, 'Date de naissance');
 
-      console.log('📏 Adding height column...');
-      await queryInterface.addColumn('player_profiles', 'height', {
+      await addColumnIfNotExists('height', {
         type: Sequelize.INTEGER,
         allowNull: true, // Temporairement nullable
         comment: 'Taille du joueur en centimètres'
-      });
+      }, 'Taille en cm');
 
-      console.log('⚖️ Adding weight column...');
-      await queryInterface.addColumn('player_profiles', 'weight', {
+      await addColumnIfNotExists('weight', {
         type: Sequelize.INTEGER,
         allowNull: true, // Temporairement nullable
         comment: 'Poids du joueur en kilogrammes'
-      });
+      }, 'Poids en kg');
 
-      console.log('🎯 Adding position column...');
-      await queryInterface.addColumn('player_profiles', 'position', {
+      await addColumnIfNotExists('position', {
         type: Sequelize.ENUM(
-          'quarterback', 'running_back', 'fullback', 'wide_receiver', 'tight_end',
-          'offensive_line', 'center', 'guard', 'tackle',
-          'defensive_end', 'defensive_tackle', 'nose_tackle', 'linebacker',
-          'cornerback', 'safety', 'free_safety', 'strong_safety',
-          'kicker', 'punter', 'long_snapper', 'return_specialist'
+          'goalkeeper', 'defender', 'midfielder', 'forward',
+          'center_back', 'full_back', 'wing_back', 'defensive_midfielder',
+          'central_midfielder', 'attacking_midfielder', 'winger', 'striker'
         ),
         allowNull: true, // Temporairement nullable
         comment: 'Position de jeu du joueur sur le terrain'
-      });
+      }, 'Position de jeu');
 
-      console.log('👥 Adding gender column...');
-      await queryInterface.addColumn('player_profiles', 'gender', {
+      await addColumnIfNotExists('gender', {
         type: Sequelize.ENUM('male', 'female'),
         allowNull: true, // Temporairement nullable
         comment: 'Genre du joueur (nécessaire pour les équipes genrées)'
-      });
+      }, 'Genre du joueur');
 
-      console.log('🎓 Adding current_year column...');
-      await queryInterface.addColumn('player_profiles', 'current_year', {
+      await addColumnIfNotExists('current_year', {
         type: Sequelize.ENUM('freshman', 'sophomore', 'redshirt'),
         allowNull: true, // Temporairement nullable
         comment: 'Année académique actuelle du joueur'
-      });
+      }, 'Année académique');
 
-      console.log('📅 Adding graduation_year column...');
-      await queryInterface.addColumn('player_profiles', 'graduation_year', {
+      await addColumnIfNotExists('graduation_year', {
         type: Sequelize.INTEGER,
         allowNull: true, // Temporairement nullable
         comment: 'Année de diplôme prévue'
-      });
+      }, 'Année de diplôme');
+
+      // ========================
+      // FONCTION UTILITAIRE POUR VÉRIFIER ET AJOUTER LES INDEXES
+      // ========================
+      
+      const addIndexIfNotExists = async (indexName, indexDefinition, description) => {
+        try {
+          await queryInterface.addIndex('player_profiles', indexDefinition);
+          console.log(`✅ Index ${indexName} created successfully`);
+        } catch (error) {
+          if (error.message.includes('already exists')) {
+            console.log(`⏭️ Index ${indexName} already exists, skipping...`);
+          } else {
+            console.error(`❌ Error creating index ${indexName}:`, error.message);
+            // Ne pas bloquer la migration pour un problème d'index
+          }
+        }
+      };
 
       // ========================
       // AJOUT DES INDEXES POUR OPTIMISER LES PERFORMANCES
@@ -96,35 +122,31 @@ module.exports = {
 
       console.log('📊 Creating performance indexes...');
 
-      // Index sur la position (recherches fréquentes par coachs)
-      await queryInterface.addIndex('player_profiles', {
+      await addIndexIfNotExists('idx_player_profiles_position', {
         fields: ['position'],
         name: 'idx_player_profiles_position',
         comment: 'Accélère les recherches par position de jeu'
-      });
+      }, 'Index sur la position');
 
-      // Index sur le genre (filtrage par équipes masculines/féminines)
-      await queryInterface.addIndex('player_profiles', {
+      await addIndexIfNotExists('idx_player_profiles_gender', {
         fields: ['gender'],
         name: 'idx_player_profiles_gender',
         comment: 'Accélère les recherches par genre'
-      });
+      }, 'Index sur le genre');
 
-      // Index sur l'année de diplôme (recherches par disponibilité temporelle)
-      await queryInterface.addIndex('player_profiles', {
+      await addIndexIfNotExists('idx_player_profiles_graduation_year', {
         fields: ['graduation_year'],
         name: 'idx_player_profiles_graduation_year',
         comment: 'Accélère les recherches par année de disponibilité'
-      });
+      }, 'Index sur l\'année de diplôme');
 
-      // Index composite pour les recherches complexes des coachs
-      await queryInterface.addIndex('player_profiles', {
+      await addIndexIfNotExists('idx_player_profiles_coach_search', {
         fields: ['gender', 'position', 'graduation_year'],
         name: 'idx_player_profiles_coach_search',
         comment: 'Optimise les recherches multi-critères des coachs'
-      });
+      }, 'Index composite pour les recherches des coachs');
 
-      console.log('✅ All missing columns and indexes added successfully');
+      console.log('✅ All missing columns and indexes processed successfully');
       
       // ========================
       // INFORMATION IMPORTANTE POUR LA SUITE
@@ -154,20 +176,49 @@ module.exports = {
     console.log('🔄 Reverting player_profiles column additions...');
 
     try {
+      // Fonction utilitaire pour supprimer les indexes en toute sécurité
+      const removeIndexIfExists = async (indexName) => {
+        try {
+          await queryInterface.removeIndex('player_profiles', indexName);
+          console.log(`✅ Index ${indexName} removed successfully`);
+        } catch (error) {
+          if (error.message.includes('does not exist')) {
+            console.log(`⏭️ Index ${indexName} does not exist, skipping...`);
+          } else {
+            console.error(`❌ Error removing index ${indexName}:`, error.message);
+          }
+        }
+      };
+
+      // Fonction utilitaire pour supprimer les colonnes en toute sécurité
+      const removeColumnIfExists = async (columnName) => {
+        try {
+          const tableDescription = await queryInterface.describeTable('player_profiles');
+          if (tableDescription[columnName]) {
+            await queryInterface.removeColumn('player_profiles', columnName);
+            console.log(`✅ Column ${columnName} removed successfully`);
+          } else {
+            console.log(`⏭️ Column ${columnName} does not exist, skipping...`);
+          }
+        } catch (error) {
+          console.error(`❌ Error removing column ${columnName}:`, error.message);
+        }
+      };
+
       // Supprimer les indexes d'abord
-      await queryInterface.removeIndex('player_profiles', 'idx_player_profiles_coach_search');
-      await queryInterface.removeIndex('player_profiles', 'idx_player_profiles_graduation_year');
-      await queryInterface.removeIndex('player_profiles', 'idx_player_profiles_gender');
-      await queryInterface.removeIndex('player_profiles', 'idx_player_profiles_position');
+      await removeIndexIfExists('idx_player_profiles_coach_search');
+      await removeIndexIfExists('idx_player_profiles_graduation_year');
+      await removeIndexIfExists('idx_player_profiles_gender');
+      await removeIndexIfExists('idx_player_profiles_position');
 
       // Ensuite supprimer les colonnes (dans l'ordre inverse)
-      await queryInterface.removeColumn('player_profiles', 'graduation_year');
-      await queryInterface.removeColumn('player_profiles', 'current_year');
-      await queryInterface.removeColumn('player_profiles', 'gender');
-      await queryInterface.removeColumn('player_profiles', 'position');
-      await queryInterface.removeColumn('player_profiles', 'weight');
-      await queryInterface.removeColumn('player_profiles', 'height');
-      await queryInterface.removeColumn('player_profiles', 'date_of_birth');
+      await removeColumnIfExists('graduation_year');
+      await removeColumnIfExists('current_year');
+      await removeColumnIfExists('gender');
+      await removeColumnIfExists('position');
+      await removeColumnIfExists('weight');
+      await removeColumnIfExists('height');
+      await removeColumnIfExists('date_of_birth');
 
       console.log('✅ Migration reverted successfully');
     } catch (error) {
