@@ -94,10 +94,10 @@ const coachRegistrationSchema = Joi.object({
   // ========================
   
   position: Joi.string()
-    .valid('head_coach', 'assistant_coach')
+    .valid('head_coach', 'assistant_coach', 'staff_member')
     .required()
     .messages({
-      'any.only': 'Position must be either "head_coach" or "assistant_coach"',
+      'any.only': 'Position must be Head Coach, Assistant Coach, or Staff Member',
       'any.required': 'Please specify your coaching position'
     }),
 
@@ -137,7 +137,7 @@ const coachRegistrationSchema = Joi.object({
     .valid('mens_soccer', 'womens_soccer')
     .required()
     .messages({
-      'any.only': 'Team sport must be either "mens_soccer" or "womens_soccer"',
+      'any.only': 'Team sport must be Men\'s Soccer or Women\'s Soccer',
       'any.required': 'Please specify which team you coach'
     }),
 

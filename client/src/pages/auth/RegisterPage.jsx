@@ -524,38 +524,33 @@ const RegisterPage = () => {
               disabled={isSubmitting}
             >
               <option value="">Select your position</option>
-              
-              {/* Positions offensives */}
-              <optgroup label="Offensive Positions">
-                <option value="quarterback">Quarterback (QB)</option>
-                <option value="running_back">Running Back (RB)</option>
-                <option value="fullback">Fullback (FB)</option>
-                <option value="wide_receiver">Wide Receiver (WR)</option>
-                <option value="tight_end">Tight End (TE)</option>
-                <option value="offensive_line">Offensive Line (OL)</option>
-                <option value="center">Center (C)</option>
-                <option value="guard">Guard (G)</option>
-                <option value="tackle">Tackle (T)</option>
+    
+              {/* Positions de Soccer Organisées par Zones */}
+              <optgroup label="Goalkeeping">
+                <option value="goalkeeper">Goalkeeper (GK)</option>
               </optgroup>
-              
-              {/* Positions défensives */}
+    
               <optgroup label="Defensive Positions">
-                <option value="defensive_end">Defensive End (DE)</option>
-                <option value="defensive_tackle">Defensive Tackle (DT)</option>
-                <option value="nose_tackle">Nose Tackle (NT)</option>
-                <option value="linebacker">Linebacker (LB)</option>
-                <option value="cornerback">Cornerback (CB)</option>
-                <option value="safety">Safety (S)</option>
-                <option value="free_safety">Free Safety (FS)</option>
-                <option value="strong_safety">Strong Safety (SS)</option>
+                <option value="center_back">Center Back (CB)</option>
+                <option value="full_back">Full Back (FB)</option>
+                <option value="wing_back">Wing Back (WB)</option>
+                <option value="sweeper">Sweeper (SW)</option>
               </optgroup>
-              
-              {/* Équipes spéciales */}
-              <optgroup label="Special Teams">
-                <option value="kicker">Kicker (K)</option>
-                <option value="punter">Punter (P)</option>
-                <option value="long_snapper">Long Snapper (LS)</option>
-                <option value="return_specialist">Return Specialist</option>
+    
+              <optgroup label="Midfield Positions">
+                <option value="defensive_midfielder">Defensive Midfielder (DM)</option>
+                <option value="central_midfielder">Central Midfielder (CM)</option>
+                <option value="attacking_midfielder">Attacking Midfielder (AM)</option>
+                <option value="wide_midfielder">Wide Midfielder (WM)</option>
+                <option value="winger">Winger (W)</option>
+              </optgroup>
+    
+              <optgroup label="Forward Positions">
+                <option value="striker">Striker (ST)</option>
+                <option value="center_forward">Center Forward (CF)</option>
+                <option value="second_striker">Second Striker (SS)</option>
+                <option value="left_winger">Left Winger (LW)</option>
+                <option value="right_winger">Right Winger (RW)</option>
               </optgroup>
             </select>
             {formErrors.position && (
@@ -709,16 +704,19 @@ const RegisterPage = () => {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="coachPosition">Position *</label>
-              <input
-                type="text"
+              <select
                 id="coachPosition"
                 name="coachPosition"
                 value={formData.coachPosition}
                 onChange={handleInputChange}
                 className={`form-input ${formErrors.coachPosition ? 'error' : ''}`}
-                placeholder="e.g., Head Coach, Assistant Coach"
                 disabled={isSubmitting}
-              />
+              >
+                <option value="">Select your position</option>
+                <option value="head_coach">Head Coach</option>
+                <option value="assistant_coach">Assistant Coach</option>
+                <option value="staff_member">Staff Member</option>
+              </select>
               {formErrors.coachPosition && (
                 <span className="error-message">{formErrors.coachPosition}</span>
               )}
@@ -799,13 +797,8 @@ const RegisterPage = () => {
                 disabled={isSubmitting}
               >
                 <option value="">Select sport</option>
-                <option value="football">Football</option>
-                <option value="basketball">Basketball</option>
-                <option value="soccer">Soccer</option>
-                <option value="baseball">Baseball</option>
-                <option value="softball">Softball</option>
-                <option value="track_field">Track & Field</option>
-                <option value="other">Other</option>
+                <option value="mens_soccer">Men's Soccer</option>
+                <option value="womens_soccer">Women's Soccer</option>
               </select>
               {formErrors.coachTeamSport && (
                 <span className="error-message">{formErrors.coachTeamSport}</span>
@@ -825,16 +818,19 @@ const RegisterPage = () => {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="njcaaPosition">Position *</label>
-              <input
-                type="text"
+              <select
                 id="njcaaPosition"
                 name="njcaaPosition"
                 value={formData.njcaaPosition}
                 onChange={handleInputChange}
                 className={`form-input ${formErrors.njcaaPosition ? 'error' : ''}`}
-                placeholder="e.g., Head Coach, Assistant Coach"
                 disabled={isSubmitting}
-              />
+              >
+                <option value="">Select your position</option>
+                <option value="head_coach">Head Coach</option>
+                <option value="assistant_coach">Assistant Coach</option>
+                <option value="staff_member">Staff Member</option>
+              </select>
               {formErrors.njcaaPosition && (
                 <span className="error-message">{formErrors.njcaaPosition}</span>
               )}
@@ -914,13 +910,8 @@ const RegisterPage = () => {
                 disabled={isSubmitting}
               >
                 <option value="">Select sport</option>
-                <option value="football">Football</option>
-                <option value="basketball">Basketball</option>
-                <option value="soccer">Soccer</option>
-                <option value="baseball">Baseball</option>
-                <option value="softball">Softball</option>
-                <option value="track_field">Track & Field</option>
-                <option value="other">Other</option>
+                <option value="mens_soccer">Men's Soccer</option>
+                <option value="womens_soccer">Women's Soccer</option>
               </select>
               {formErrors.njcaaTeamSport && (
                 <span className="error-message">{formErrors.njcaaTeamSport}</span>

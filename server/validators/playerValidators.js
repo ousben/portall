@@ -164,21 +164,16 @@ const playerRegistrationSchema = Joi.object({
   // Liste complète des positions de football américain organisée par catégories
   position: Joi.string()
     .valid(
-      // Positions Offensives
-      'quarterback', 'running_back', 'fullback', 'wide_receiver', 'tight_end',
-      'offensive_line', 'center', 'guard', 'tackle',
-      
-      // Positions Défensives  
-      'defensive_end', 'defensive_tackle', 'nose_tackle', 'linebacker',
-      'cornerback', 'safety', 'free_safety', 'strong_safety',
-      
-      // Équipes Spéciales
-      'kicker', 'punter', 'long_snapper', 'return_specialist'
+      // Positions de Soccer (remplace les positions de football américain)
+      'goalkeeper', 'center_back', 'full_back', 'wing_back', 'sweeper',
+      'defensive_midfielder', 'central_midfielder', 'attacking_midfielder', 
+      'wide_midfielder', 'winger', 'striker', 'center_forward', 
+      'second_striker', 'left_winger', 'right_winger'
     )
     .required()
     .messages({
-      'any.only': 'Veuillez sélectionner une position de jeu valide',
-      'any.required': 'La position de jeu est requise'
+      'any.only': 'Please select a valid soccer position',
+      'any.required': 'Playing position is required'
     }),
 
   collegeId: Joi.number()

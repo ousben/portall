@@ -99,10 +99,10 @@ const njcaaCoachRegistrationSchema = Joi.object({
   // ========================
   
   position: Joi.string()
-    .valid('head_coach', 'assistant_coach')
+    .valid('head_coach', 'assistant_coach', 'staff_member')
     .required()
     .messages({
-      'any.only': 'Position must be either "Head Coach" or "Assistant Coach"',
+      'any.only': 'Position must be Head Coach, Assistant Coach, or Staff Member',
       'any.required': 'Please specify your coaching position'
     }),
 
@@ -161,7 +161,7 @@ const njcaaCoachRegistrationSchema = Joi.object({
     .valid('mens_soccer', 'womens_soccer')
     .required()
     .messages({
-      'any.only': 'Team sport must be either Men\'s Soccer or Women\'s Soccer',
+      'any.only': 'Team sport must be Men\'s Soccer or Women\'s Soccer',
       'any.required': 'Please specify which team you coach'
     }),
 
