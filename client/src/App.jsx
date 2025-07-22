@@ -1,46 +1,63 @@
 // portall/client/src/App.jsx
+
 import React from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 
-import { AuthProvider, useAuth } from '@contexts/AuthContext'
+import { AuthProvider } from '@contexts/AuthContext'
 import ProtectedRoute from '@components/auth/ProtectedRoute'
 import PublicRoute from '@components/auth/PublicRoute'
 import LoadingSpinner from '@components/common/LoadingSpinner'
 
-// Pages d'authentification
+// Pages d'authentification (Phase 5A - déjà implémentées)
 import LoginPage from '@pages/auth/LoginPage'
 import RegisterPage from '@pages/auth/RegisterPage'
 import ForgotPasswordPage from '@pages/auth/ForgotPasswordPage'
 import ResetPasswordPage from '@pages/auth/ResetPasswordPage'
 
-// Pages générales
+// Pages générales (Phase 5A - déjà implémentées)
 import LandingPage from '@pages/LandingPage'
 import UnauthorizedPage from '@pages/UnauthorizedPage'
 import NotFoundPage from '@pages/NotFoundPage'
 
-// Dashboards (à implémenter en Phase 5B)
-// import PlayerDashboard from '@pages/player/Dashboard'
-// import CoachDashboard from '@pages/coach/Dashboard'
-// import NJCAACoachDashboard from '@pages/njcaa-coach/Dashboard'
-// import AdminDashboard from '@pages/admin/Dashboard'
+// 🎯 NOUVEAUX DASHBOARDS PHASE 5B
+import PlayerDashboard from '@pages/dashboard/PlayerDashboard'
+import CoachDashboard from '@pages/dashboard/CoachDashboard'
+import NJCAACoachDashboard from '@pages/dashboard/NJCAACoachDashboard'
+import AdminDashboard from '@pages/dashboard/AdminDashboard'
+
+// 👤 NOUVELLES PAGES DE PROFIL PHASE 5B
+import ProfileEdit from '@pages/profile/ProfileEdit'
+import ProfileView from '@pages/profile/ProfileView'
+
+// 🧭 Composant de routage intelligent
+import DashboardRouter from '@components/dashboard/DashboardRouter'
 
 /**
- * 🚀 Application Principale Portall - Phase 5A Complète
+ * 🚀 Application Principale Portall - Phase 5B Complète
  * 
- * Cette application intègre maintenant tous les éléments de la Phase 5A :
- * - Système d'authentification complet
- * - Protection des routes selon les types d'utilisateurs
- * - Design responsive pour tous les appareils
- * - Gestion d'erreur élégante
- * - Communication fluide avec le backend
+ * Cette version finalise l'architecture frontend en connectant tous les
+ * dashboards spécialisés avec l'API backend. Chaque type d'utilisateur
+ * dispose maintenant de son interface optimisée.
+ * 
+ * 🎯 Nouveautés Phase 5B :
+ * - Dashboards fonctionnels pour tous les types d'utilisateurs
+ * - Gestion de profil complète
+ * - Routage intelligent automatique
+ * - Intégration fluide avec le workflow unifié des coachs
+ * 
+ * 🏗️ Architecture en couches :
+ * 1. Routes publiques (pour visiteurs non connectés)
+ * 2. Routes d'authentification (login, register, etc.)
+ * 3. Routes protégées (dashboards, profils)
+ * 4. Routes de gestion d'erreur
  */
 function App() {
   return (
     <AuthProvider>
       <Router>
         <div className="app">
-          {/* Configuration optimisée des notifications toast */}
+          {/* 🎨 Configuration des notifications utilisateur */}
           <Toaster
             position="top-right"
             toastOptions={{
@@ -69,7 +86,7 @@ function App() {
           />
 
           <Routes>
-            {/* 🌍 Routes publiques */}
+            {/* 🌍 ROUTES PUBLIQUES */}
             <Route 
               path="/" 
               element={
@@ -115,7 +132,7 @@ function App() {
               } 
             />
 
-            {/* 🔐 Redirection intelligente vers les dashboards */}
+            {/* 🧭 ROUTE DE DASHBOARD INTELLIGENT */}
             <Route 
               path="/dashboard" 
               element={
@@ -125,9 +142,7 @@ function App() {
               } 
             />
 
-            {/* 🎯 Routes de dashboards spécifiques (Phase 5B) */}
-            {/* Temporairement commentées - à implémenter en Phase 5B */}
-            {/*
+            {/* 🎯 DASHBOARDS SPÉCIALISÉS PHASE 5B */}
             <Route 
               path="/dashboard/player" 
               element={
@@ -163,9 +178,27 @@ function App() {
                 </ProtectedRoute>
               } 
             />
-            */}
 
-            {/* 🚫 Pages d'erreur */}
+            {/* 👤 ROUTES DE GESTION DE PROFIL */}
+            <Route 
+              path="/profile/edit" 
+              element={
+                <ProtectedRoute>
+                  <ProfileEdit />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/profile/view/:userId?" 
+              element={
+                <ProtectedRoute>
+                  <ProfileView />
+                </ProtectedRoute>
+              } 
+            />
+
+            {/* 🚫 ROUTES D'ERREUR */}
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
             <Route path="/404" element={<NotFoundPage />} />
             <Route path="*" element={<Navigate to="/404" replace />} />
@@ -173,68 +206,6 @@ function App() {
         </div>
       </Router>
     </AuthProvider>
-  )
-}
-
-/**
- * 🎯 Composant temporaire pour la redirection des dashboards
- * 
- * En Phase 5A, ce composant affiche un message informatif.
- * Il sera remplacé par le routeur intelligent en Phase 5B.
- */
-const DashboardRouter = () => {
-  const { user, isLoading } = useAuth()
-
-  if (isLoading) {
-    return <LoadingSpinner message="Loading your dashboard..." />
-  }
-
-  return (
-    <div className="error-page">
-      <div className="error-container">
-        <div className="error-illustration not-found">
-          🚧
-        </div>
-        
-        <div className="error-content">
-          <h1>Dashboard Coming Soon!</h1>
-          <p>
-            Welcome {user?.firstName}! Your personalized {user?.userType} dashboard 
-            will be available in Phase 5B. All your authentication is working perfectly.
-          </p>
-        </div>
-
-        <div className="error-suggestions">
-          <h3>What's working now:</h3>
-          <ul className="suggestion-list">
-            <li className="suggestion-item">
-              ✅ User authentication and registration
-            </li>
-            <li className="suggestion-item">
-              ✅ Secure password reset workflow
-            </li>
-            <li className="suggestion-item">
-              ✅ Responsive design for all devices
-            </li>
-            <li className="suggestion-item">
-              ✅ Integration with your backend API
-            </li>
-          </ul>
-        </div>
-
-        <div className="error-actions">
-          <button 
-            onClick={() => window.location.reload()} 
-            className="error-button primary"
-          >
-            Refresh Page
-          </button>
-          <Link to="/" className="error-button secondary">
-            Back to Home
-          </Link>
-        </div>
-      </div>
-    </div>
   )
 }
 
