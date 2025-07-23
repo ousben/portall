@@ -13,14 +13,29 @@
     "test:setup": "node scripts/setup-test-environment.js",
     "test:auth": "node test-registration-flow.js",
     "stripe:sync": "node scripts/sync-stripe-plans.js",
+    
     "test": "jest",
-    "test:unit": "jest tests/unit --verbose",
-    "test:integration": "jest tests/integration --verbose",
-    "test:e2e": "jest tests/e2e --verbose",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:njcaa": "jest tests/unit/models/njcaaCoachProfile.test.js --verbose",
     "test:debug": "node --inspect-brk=0.0.0.0:9229 node_modules/.bin/jest --runInBand --no-cache",
+    
+    "test:unit": "jest tests/unit --verbose",
+    "test:unit:models": "jest tests/unit/models --verbose",
+    "test:unit:services": "jest tests/unit/services --verbose",
+    
+    "test:integration": "jest tests/integration --verbose",
+    "test:integration:auth": "jest tests/integration/api/authRoutes.test.js --verbose",
+    "test:integration:njcaa": "jest tests/integration/api/njcaaCoachRoutes.test.js --verbose",
+    
+    "test:e2e": "jest tests/e2e --verbose",
+    "test:e2e:njcaa": "jest tests/e2e/njcaaCoachWorkflow.test.js --verbose",
+    
+    "test:phase5a": "jest tests/unit/models tests/unit/services tests/integration/api/authRoutes.test.js --verbose",
+    "test:phase5b": "jest tests/unit/models/NJCAACoachProfile.test.js tests/integration/api/njcaaCoachRoutes.test.js tests/e2e/njcaaCoachWorkflow.test.js --verbose",
+    
+    "test:full-suite": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:quick": "jest tests/unit tests/integration --passWithNoTests",
+    
     "db:test:setup": "createdb portall_test && echo 'Test database created successfully'"
   },
   "keywords": [
